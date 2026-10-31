@@ -140,6 +140,7 @@ export default function OnboardingPage() {
 
   if (profile?.profile_complete) return <Navigate to="/discover" replace />;
   if (!uid) return null;
+  const userId = uid;
 
   const parsedBasics = () => basicsSchema.safeParse({
     ...b,
@@ -197,10 +198,10 @@ export default function OnboardingPage() {
         };
 
         if (profile) {
-          await updateProfile(uid, payload as Parameters<typeof updateProfile>[1]);
+          await 	updateProfile(userId, payload as Parameters<typeof updateProfile>[1]);
         } else {
           await createProfile(
-            uid,
+            userId,
             d.date_of_birth,
             payload as Parameters<typeof createProfile>[2],
           );
@@ -217,13 +218,13 @@ export default function OnboardingPage() {
           return;
         }
 
-        await savePrefs(uid, {
+        await savePrefs(userId, {
           minimum_age: minAge,
           maximum_age: maxAge,
           preferred_gender: b.interested_in,
         });
       } else if (step === 2) {
-        const currentPhotos = await listMyPhotos(uid);
+        const currentPhotos = await listMyPhotos(userId);
         if (currentPhotos.length < MIN_PHOTOS) {
           setErr(`Add at least ${MIN_PHOTOS} photos to continue.`);
           return;
@@ -258,7 +259,7 @@ export default function OnboardingPage() {
     try {
       setBusy(true);
 
-      const latestPhotos = await listMyPhotos(uid);
+      const latestPhotos = await listMyPhotos(userId);
       if (latestPhotos.length < MIN_PHOTOS) {
         setErr(`Add at least ${MIN_PHOTOS} photos before publishing.`);
         setStep(2);
@@ -374,7 +375,7 @@ export default function OnboardingPage() {
                 </p>
               </div>
 
-              <PhotoSlots uid={uid} onChange={count => setPhotoCount(Math.min(count, MAX_PHOTOS))} />
+              <PhotoSlots uid={userId} onChange={count => setPhotoCount(Math.min(count, MAX_PHOTOS))} />
 
               <p className="text-sm text-slate2">
                 {Math.min(photoCount, MAX_PHOTOS)} of {MAX_PHOTOS} photos added.
