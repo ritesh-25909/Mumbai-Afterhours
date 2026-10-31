@@ -1,0 +1,65 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+
+@import './theme.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', Manrope, system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--mist);
+  }
+
+  body {
+    font-family: 'Inter', Manrope, system-ui, sans-serif;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 600;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--sky);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation: none !important;
+      transition: none !important;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-base font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-royal text-white hover:bg-sky;
+  }
+
+  .btn-ghost {
+    @apply btn border border-white/30 text-white hover:bg-white/10;
+  }
+
+  .btn-outline {
+    @apply btn border border-line bg-white text-ink hover:bg-mist;
+  }
+
+  .field {
+    @apply w-full rounded-lg border border-line bg-white px-4 py-3 text-base;
+  }
+
+  .card {
+    @apply rounded-card bg-white border border-line shadow-card;
+  }
+}
