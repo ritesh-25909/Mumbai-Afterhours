@@ -1,37 +1,43 @@
-
 import { supabase } from '../../lib/supabase';
 
 export type Photo = {
   id: string;
   storage_path: string;
   display_order: number;
-  url: string;
   prompt: string | null;
+  url: string;
 };
 
+const PHOTO_BUCKET = 'profile-photos';
+
 export async function listMyPhotos(uid: string): Promise<Photo[]> {
+  if (!uid) {
+    throw new Error('You must be logged in to load photos.');
+  }
+
   const { data, error } = await supabase
     .from('profile_photos')
-    .select('id,storage_path,display_order,prompt')
+    .select('id, storage_path, display_order, prompt')
     .eq('user_id', uid)
-    .order('display_order');
+    .order('display_order', { ascending: true });
 
   if (error) {
-    throw new Error('Could not load your photos.');
+    console.error('listMyPhotos error:', error);
+    throw new Error('Could not load your photos. Please retry.');
   }
 
   if (!data?.length) return [];
 
-  const { data: signed, error: signedError } = await supabase
-    .storage
-    .from('profile-photos')
+  const { data: signed, error: signedError } = await supabase.storage
+    .from(PHOTO_BUCKET)
     .createSignedUrls(
       data.map(photo => photo.storage_path),
       3600,
     );
 
   if (signedError) {
-    throw new Error('Could not load your photos.');
+    console.error('Photo signed URL error:', signedError);
+    throw new Error('Could not load your photo previews.');
   }
 
   return data.map((photo, index) => ({
@@ -42,104 +48,135 @@ export async function listMyPhotos(uid: string): Promise<Photo[]> {
 }
 
 /**
- * Save a prompt against an existing photo slot.
- * Passing null clears the optional prompt.
+ * Saves a prompt against the currently authenticated user's photo slot.
+ * The SQL function uses auth.uid(), so a user cannot update another
+ * user's photo prompt.
  */
 export async function updatePhotoPrompt(
   uid: string,
   order: number,
   prompt: string | null,
 ): Promise<void> {
-  const { data, error } = await supabase
-    .from('profile_photos')
-    .update({ prompt })
-    .eq('user_id', uid)
-    .eq('display_order', order)
-    .select('id');
-
-  if (error) {
-    throw new Error(error.message);
+  if (!uid) {
+    throw new Error('You must be logged in.');
   }
 
-  if (!data?.length) {
-    throw new Error('Could not find your photo to save its prompt.');
+  if (!Number.isInteger(order) || order < 1 || order > 3) {
+    throw new Error('Invalid photo slot.');
+  }
+
+  const { data, error } = await supabase.rpc(
+    'save_my_photo_prompt',
+    {
+      p_order: order,
+      p_prompt: prompt?.trim() || null,
+    },
+  );
+
+  if (error) {
+    console.error('updatePhotoPrompt error:', error);
+    throw new Error(error.message || 'Could not save your photo prompt.');
+  }
+
+  if (data !== true) {
+    throw new Error('The photo prompt was not saved. Please retry.');
   }
 }
 
-// Upload first, then swap atomically on the server.
+/**
+ * Uploads the new image, replaces the existing photo record using
+ * your existing replace_photo RPC, and then saves its prompt.
+ */
 export async function savePhoto(
   uid: string,
   order: number,
   blob: Blob,
   prompt: string | null = null,
 ): Promise<void> {
+  if (!uid) {
+    throw new Error('You must be logged in.');
+  }
+
+  if (!Number.isInteger(order) || order < 1 || order > 3) {
+    throw new Error('Invalid photo slot.');
+  }
+
   const path = `${uid}/${crypto.randomUUID()}.webp`;
 
-  const upload = await supabase
-    .storage
-    .from('profile-photos')
+  const upload = await supabase.storage
+    .from(PHOTO_BUCKET)
     .upload(path, blob, {
       contentType: 'image/webp',
       upsert: false,
     });
 
   if (upload.error) {
+    console.error('Photo upload error:', upload.error);
+
     throw new Error(
       upload.error.message.toLowerCase().includes('quota')
         ? 'Storage is full. Contact support.'
-        : 'Upload failed. Check your connection and retry.',
+        : 'Photo upload failed. Check your connection and retry.',
     );
   }
 
-  const { data: oldPath, error } = await supabase.rpc(
-    'replace_photo',
-    {
+  let oldPath: string | null = null;
+  let replacementSucceeded = false;
+
+  try {
+    const { data, error } = await supabase.rpc('replace_photo', {
       p_order: order,
       p_path: path,
-    },
-  );
+    });
 
-  if (error) {
-    await supabase.storage
-      .from('profile-photos')
-      .remove([path]);
+    if (error) {
+      console.error('replace_photo error:', error);
+      throw new Error(error.message || 'Could not replace the photo.');
+    }
 
-    throw new Error('Could not save the photo. Retry.');
-  }
+    oldPath = typeof data === 'string' ? data : null;
+    replacementSucceeded = true;
 
-  // Save the selected prompt on the newly uploaded photo.
-  const { data: savedPhoto, error: promptError } = await supabase
-    .from('profile_photos')
-    .update({ prompt })
-    .eq('user_id', uid)
-    .eq('display_order', order)
-    .select('id');
+    // Persist the prompt after the photo record has been replaced.
+    await updatePhotoPrompt(uid, order, prompt);
+  } catch (error) {
+    // If the replacement did not happen, remove the newly uploaded file.
+    if (!replacementSucceeded) {
+      await supabase.storage.from(PHOTO_BUCKET).remove([path]);
+    }
 
-  if (promptError || !savedPhoto?.length) {
-    throw new Error(
-      'Photo uploaded, but its prompt could not be saved. Please select the prompt again.',
-    );
-  }
+    throw error;
+  } finally {
+    // The old image is no longer needed after a successful replacement.
+    if (replacementSucceeded && oldPath) {
+      const { error: removeError } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .remove([oldPath]);
 
-  // Delete the old storage object only after the new photo is saved.
-  if (oldPath) {
-    await supabase.storage
-      .from('profile-photos')
-      .remove([oldPath as string]);
+      if (removeError) {
+        console.error('Could not remove old photo file:', removeError);
+      }
+    }
   }
 }
 
-export async function removePhoto(p: Photo): Promise<void> {
+export async function removePhoto(photo: Photo): Promise<void> {
   const { error } = await supabase
     .from('profile_photos')
     .delete()
-    .eq('id', p.id);
+    .eq('id', photo.id);
 
   if (error) {
+    console.error('removePhoto database error:', error);
     throw new Error('Could not remove the photo.');
   }
 
-  await supabase.storage
-    .from('profile-photos')
-    .remove([p.storage_path]);
+  const { error: storageError } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .remove([photo.storage_path]);
+
+  if (storageError) {
+    console.error('removePhoto storage error:', storageError);
+    // The database row is already deleted; do not report that deletion failed.
+  }
 }

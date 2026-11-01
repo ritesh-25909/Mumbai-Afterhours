@@ -1,6 +1,15 @@
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, Trash2, RefreshCw } from 'lucide-react';
+import {
+  Camera,
+  Trash2,
+  RefreshCw,
+} from 'lucide-react';
 
 import {
   listMyPhotos,
@@ -48,20 +57,31 @@ export function PhotoSlots({
 
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const lastFile = useRef<Record<number, File>>({});
+  const onChangeRef = useRef(onChange);
+
+  // Keep the latest callback without making refresh depend on its identity.
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   const refresh = useCallback(async () => {
     try {
       const currentPhotos = await listMyPhotos(uid);
 
       setPhotos(currentPhotos);
-      onChange?.(currentPhotos.length);
+      onChangeRef.current?.(currentPhotos.length);
       setLoadError(null);
-    } catch (e) {
-      setLoadError((e as Error).message);
+    } catch (error) {
+      console.error('Could not refresh photos:', error);
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : 'Could not load your photos.',
+      );
     } finally {
       setLoading(false);
     }
-  }, [uid, onChange]);
+  }, [uid]);
 
   useEffect(() => {
     void refresh();
@@ -80,33 +100,50 @@ export function PhotoSlots({
     try {
       const blob = await reencode(file);
 
-      // Preserve the selected prompt when replacing a photo.
+      // Preserve the saved prompt when replacing the image in this slot.
       const existingPrompt =
         photos.find(photo => photo.display_order === order)?.prompt ?? null;
 
       await savePhoto(uid, order, blob, existingPrompt);
 
       await refresh();
-    } catch (e) {
+    } catch (error) {
+      console.error('Photo upload failed:', error);
+
       setErrors(current => ({
         ...current,
-        [order]: (e as Error).message,
+        [order]:
+          error instanceof Error
+            ? error.message
+            : 'Photo upload failed. Please retry.',
       }));
     } finally {
       setBusy(null);
     }
   }
 
-  async function remove(p: Photo) {
-    setBusy(p.display_order);
+  async function remove(photo: Photo) {
+    const order = photo.display_order;
+
+    setErrors(current => ({
+      ...current,
+      [order]: '',
+    }));
+
+    setBusy(order);
 
     try {
-      await removePhoto(p);
+      await removePhoto(photo);
       await refresh();
-    } catch (e) {
+    } catch (error) {
+      console.error('Photo removal failed:', error);
+
       setErrors(current => ({
         ...current,
-        [p.display_order]: (e as Error).message,
+        [order]:
+          error instanceof Error
+            ? error.message
+            : 'Could not remove the photo.',
       }));
     } finally {
       setBusy(null);
@@ -116,6 +153,13 @@ export function PhotoSlots({
   async function changePrompt(order: number, prompt: string) {
     const previousPhotos = photos;
 
+    const targetPhoto = previousPhotos.find(
+      photo => photo.display_order === order,
+    );
+
+    if (!targetPhoto) return;
+
+    // Update the selected photo and clear the same prompt from other slots.
     const updatedPhotos = previousPhotos.map(photo => {
       if (photo.display_order === order) {
         return {
@@ -124,7 +168,6 @@ export function PhotoSlots({
         };
       }
 
-      // Keep prompts unique across the three photo slots.
       if (prompt && photo.prompt === prompt) {
         return {
           ...photo,
@@ -135,42 +178,47 @@ export function PhotoSlots({
       return photo;
     });
 
+    setPhotos(updatedPhotos);
+
     setErrors(current => ({
       ...current,
       [order]: '',
     }));
 
-    setPhotos(updatedPhotos);
     setBusy(order);
 
     try {
-      // Persist the selected prompt and clear any duplicate selection.
       const changedPhotos = updatedPhotos.filter(photo => {
-        const oldPhoto = previousPhotos.find(
-          old => old.display_order === photo.display_order,
+        const previous = previousPhotos.find(
+          item => item.id === photo.id,
         );
 
-        return oldPhoto?.prompt !== photo.prompt;
+        return previous?.prompt !== photo.prompt;
       });
 
-      await Promise.all(
-        changedPhotos.map(photo =>
-          updatePhotoPrompt(
-            uid,
-            photo.display_order,
-            photo.prompt,
-          ),
-        ),
-      );
+      // Save every changed slot so prompts remain unique.
+      for (const photo of changedPhotos) {
+        await updatePhotoPrompt(
+          uid,
+          photo.display_order,
+          photo.prompt,
+        );
+      }
 
+      // Reload from Supabase to confirm persisted values.
       await refresh();
-    } catch (e) {
-      // Restore the previous UI state if saving fails.
+    } catch (error) {
+      console.error('Prompt save failed:', error);
+
+      // Restore the previous UI if the database update fails.
       setPhotos(previousPhotos);
 
       setErrors(current => ({
         ...current,
-        [order]: (e as Error).message,
+        [order]:
+          error instanceof Error
+            ? error.message
+            : 'Could not save the prompt. Please retry.',
       }));
     } finally {
       setBusy(null);
@@ -193,7 +241,7 @@ export function PhotoSlots({
           <button
             type="button"
             className="underline"
-            onClick={refresh}
+            onClick={() => void refresh()}
           >
             Retry
           </button>
@@ -225,8 +273,8 @@ export function PhotoSlots({
                 id={`photo-prompt-${order}`}
                 value={selectedPrompt}
                 disabled={!photo || working}
-                onChange={e =>
-                  void changePrompt(order, e.target.value)
+                onChange={event =>
+                  void changePrompt(order, event.target.value)
                 }
                 className="mb-3 w-full rounded-lg border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               >
@@ -266,7 +314,10 @@ export function PhotoSlots({
                     disabled={working}
                     className="flex h-full min-h-48 w-full flex-col items-center justify-center gap-1 text-slate2"
                   >
-                    <Camera className="h-6 w-6" aria-hidden />
+                    <Camera
+                      className="h-6 w-6"
+                      aria-hidden="true"
+                    />
 
                     <span className="px-1 text-center text-sm">
                       Add {LABELS[order - 1].toLowerCase()}
@@ -325,10 +376,11 @@ export function PhotoSlots({
                 capture="user"
                 hidden
                 aria-label={LABELS[order - 1]}
-                onChange={e => {
-                  const file = e.target.files?.[0];
+                onChange={event => {
+                  const file = event.target.files?.[0];
 
-                  e.target.value = '';
+                  // Allow selecting the same file again after a failed upload.
+                  event.target.value = '';
 
                   if (file) {
                     void handle(order, file);
