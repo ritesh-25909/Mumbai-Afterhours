@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { searchLocations } from '../../data/mumbaiLocations';
 import { GENDERS, INTENTIONS } from '../../lib/constants';
 
 export type ProfilePromptAnswer = { prompt: string; answer: string };
@@ -19,6 +20,9 @@ export type BasicsState = {
   college?: string;
   education_status?: string;
   profile_prompts?: string;
+  smoking?: string;
+  alcohol?: string;
+  religion?: string;
 };
 
 /**
@@ -119,6 +123,11 @@ export function BasicsForm({
   const [search, setSearch] = useState('');
   const [showAll, setShowAll] = useState(false);
   const [customPrompt, setCustomPrompt] = useState('');
+  // Keep typed text separate from the confirmed neighbourhood value.
+  const [locationQuery, setLocationQuery] = useState(v.neighbourhood ?? '');
+  const [locationSelected, setLocationSelected] = useState(Boolean(v.neighbourhood?.trim()));
+  const [showOtherLocation, setShowOtherLocation] = useState(false);
+  const [otherLocation, setOtherLocation] = useState('');
 
   const promptAnswers = useMemo(() => parsePromptAnswers(v.profile_prompts), [v.profile_prompts]);
   const selectedInterests = parseCsv(v.interests);
@@ -213,12 +222,164 @@ export function BasicsForm({
         </div>
       </fieldset>
 
-      <label className="block">
-        <span className="mb-1 block font-semibold">🎈 Neighbourhood <span className="text-rose-600">*</span></span>
-        <input className="field" placeholder="e.g. Bandra, Powai" value={v.neighbourhood}
-          required aria-required="true"
-          onChange={e => set({ neighbourhood: e.target.value })} />
-      </label>
+      <div className="relative">
+        <label className="block">
+          <span className="mb-1 block font-semibold">🎈 Neighbourhood <span className="text-rose-600">*</span></span>
+          <input
+            className="field"
+            placeholder="Start typing, e.g. band, dahi, andh…"
+            value={locationQuery}
+            required
+            aria-required="true"
+            aria-autocomplete="list"
+            aria-expanded={Boolean(locationQuery.trim()) && !locationSelected && !showOtherLocation}
+            onChange={e => {
+              const next = e.target.value;
+              setLocationQuery(next);
+              setLocationSelected(false);
+              setShowOtherLocation(false);
+              setOtherLocation('');
+              // Do not let unconfirmed search text be saved as the profile location.
+              set({ neighbourhood: '' });
+            }}
+          />
+        </label>
+
+        {locationQuery.trim() && !locationSelected && !showOtherLocation && (
+          <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto rounded-xl border border-line bg-white p-1 shadow-xl" role="listbox" aria-label="Location suggestions">
+            {searchLocations(locationQuery).map(location => (
+              <button
+                key={location}
+                type="button"
+                role="option"
+                aria-selected={false}
+                onClick={() => {
+                  setLocationQuery(location);
+                  setLocationSelected(true);
+                  setShowOtherLocation(false);
+                  set({ neighbourhood: location });
+                }}
+                className="flex w-full items-center rounded-lg px-3 py-3 text-left text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none"
+              >
+                <span className="mr-2 text-slate2" aria-hidden="true">📍</span>
+                {location}
+              </button>
+            ))}
+            {searchLocations(locationQuery).length === 0 && (
+              <p className="px-3 py-2 text-sm text-slate2">No matching locations found.</p>
+            )}
+            <button
+              type="button"
+              role="option"
+              aria-selected={false}
+              onClick={() => {
+                setShowOtherLocation(true);
+                setOtherLocation(locationQuery.trim());
+              }}
+              className="flex w-full items-center rounded-lg border-t border-line px-3 py-3 text-left text-sm font-semibold text-royal hover:bg-blue-50"
+            >
+              + Other — enter a different location
+            </button>
+          </div>
+        )}
+
+        {showOtherLocation && (
+          <div className="mt-2 space-y-2 rounded-xl border border-line bg-white p-3">
+            <label className="block text-sm font-medium" htmlFor="other-neighbourhood">Enter your location</label>
+            <input
+              id="other-neighbourhood"
+              className="field"
+              placeholder="Enter area / neighbourhood"
+              value={otherLocation}
+              maxLength={100}
+              onChange={e => setOtherLocation(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={!otherLocation.trim()}
+                onClick={() => {
+                  const confirmed = otherLocation.trim().replace(/\s+/g, ' ');
+                  setLocationQuery(confirmed);
+                  setLocationSelected(true);
+                  setShowOtherLocation(false);
+                  set({ neighbourhood: confirmed });
+                }}
+                className="rounded-xl bg-royal px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Confirm location
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOtherLocation(false);
+                  setOtherLocation('');
+                }}
+                className="rounded-xl border border-line px-4 py-2 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {locationSelected && v.neighbourhood.trim() && (
+          <p className="mt-1 text-sm text-emerald-700" role="status">✓ Selected: {v.neighbourhood}</p>
+        )}
+        {!v.neighbourhood.trim() && (
+          <p className="mt-1 text-xs text-slate2">Choose a dropdown suggestion or confirm an Other location to continue.</p>
+        )}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <fieldset>
+          <legend className="mb-2 font-semibold">Smoking</legend>
+          <div className="flex flex-wrap gap-2">
+            {['Smoker', 'Non-smoker', 'Sometimes'].map(option => {
+              const selected = (v.smoking ?? '') === option;
+              return (
+                <button key={option} type="button" aria-pressed={selected}
+                  onClick={() => set({ smoking: selected ? '' : option })}
+                  className={`rounded-full border px-3 py-2 text-sm transition ${selected ? 'border-royal bg-royal text-white' : 'border-line bg-white text-slate-700 hover:border-royal'}`}>
+                  {option}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="mb-2 font-semibold">Alcohol</legend>
+          <div className="flex flex-wrap gap-2">
+            {['Alcohol', 'Non-alcohol', 'Sometimes'].map(option => {
+              const selected = (v.alcohol ?? '') === option;
+              return (
+                <button key={option} type="button" aria-pressed={selected}
+                  onClick={() => set({ alcohol: selected ? '' : option })}
+                  className={`rounded-full border px-3 py-2 text-sm transition ${selected ? 'border-royal bg-royal text-white' : 'border-line bg-white text-slate-700 hover:border-royal'}`}>
+                  {option}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      </div>
+
+      <fieldset>
+        <legend className="mb-2 font-semibold">Religion</legend>
+        <div className="flex flex-wrap gap-2">
+          {['Hindu', 'Muslim', 'Christian', 'Sikh', 'Buddhist', 'Jain', 'Atheist', 'Other'].map(option => {
+            const selected = (v.religion ?? '') === option;
+            return (
+              <button key={option} type="button" aria-pressed={selected}
+                onClick={() => set({ religion: selected ? '' : option })}
+                className={`rounded-full border px-3 py-2 text-sm transition ${selected ? 'border-royal bg-royal text-white' : 'border-line bg-white text-slate-700 hover:border-royal'}`}>
+                {option}
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
