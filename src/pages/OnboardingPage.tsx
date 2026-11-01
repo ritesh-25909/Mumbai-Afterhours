@@ -47,15 +47,15 @@ const empty: BasicsState = {
   college: '',
   education_status: '',
   profile_prompts: '[]',
+
+  // New profile fields
+  smoking: '',
+  alcohol: '',
+  religion: '',
 };
 
 /**
  * Converts profile_prompts into the array format expected by Supabase.
- *
- * Supports:
- * - JSONB arrays returned by Supabase
- * - JSON strings maintained by the onboarding form
- * - Empty or invalid values
  */
 function readPromptAnswers(value: unknown): ProfilePromptAnswer[] {
   let parsed: unknown = value;
@@ -109,17 +109,9 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Load existing profile information into the onboarding form.
+  // Load existing profile information into onboarding.
   useEffect(() => {
     if (!profile || !uid) return;
-
-    const extendedProfile = profile as typeof profile & {
-      height?: string | null;
-      occupation?: string | null;
-      college?: string | null;
-      education_status?: string | null;
-      profile_prompts?: ProfilePromptAnswer[] | string | null;
-    };
 
     setB({
       display_name: profile.display_name,
@@ -128,19 +120,23 @@ export default function OnboardingPage() {
       interested_in: profile.interested_in,
       neighbourhood: profile.neighbourhood ?? '',
       bio: profile.bio ?? '',
-      languages: profile.languages.join(', '),
-      interests: profile.interests.join(', '),
+      languages: (profile.languages ?? []).join(', '),
+      interests: (profile.interests ?? []).join(', '),
       relationship_intention: profile.relationship_intention ?? '',
 
-      height: extendedProfile.height ?? '',
-      occupation: extendedProfile.occupation ?? '',
-      college: extendedProfile.college ?? '',
-      education_status: extendedProfile.education_status ?? '',
+      height: profile.height ?? '',
+      occupation: profile.occupation ?? '',
+      college: profile.college ?? '',
+      education_status: profile.education_status ?? '',
 
-      // BasicsForm uses a JSON string, while Supabase returns a JSONB array.
       profile_prompts: JSON.stringify(
-        readPromptAnswers(extendedProfile.profile_prompts),
+        readPromptAnswers(profile.profile_prompts),
       ),
+
+      // Restore saved selections
+      smoking: profile.smoking ?? '',
+      alcohol: profile.alcohol ?? '',
+      religion: profile.religion ?? '',
     });
 
     getPrefs(uid)
@@ -158,7 +154,7 @@ export default function OnboardingPage() {
         setPhotoCount(items.length);
       })
       .catch(() => {
-        // PhotoSlots displays its own load error when it loads the gallery.
+        // PhotoSlots displays its own gallery load error.
       });
   }, [profile, uid]);
 
@@ -231,11 +227,8 @@ export default function OnboardingPage() {
 
         const d = r.data;
 
-        // Convert form JSON string into an array before sending to Supabase.
         const promptAnswers = readPromptAnswers(b.profile_prompts);
 
-        // Explicitly type the payload using the createProfile API argument.
-        // This keeps createProfile and updateProfile compatible.
         const payload: Parameters<typeof createProfile>[2] = {
           display_name: d.display_name,
           gender: d.gender,
@@ -251,8 +244,12 @@ export default function OnboardingPage() {
           college: b.college?.trim() || null,
           education_status: b.education_status?.trim() || null,
 
-          // Supabase JSONB expects an array, not a JSON string.
           profile_prompts: promptAnswers,
+
+          // Save the new fields
+          smoking: b.smoking?.trim() || null,
+          alcohol: b.alcohol?.trim() || null,
+          religion: b.religion?.trim() || null,
         };
 
         if (profile) {
@@ -554,7 +551,6 @@ export default function OnboardingPage() {
                 </section>
               )}
 
-              {/* Answers appear directly, without a generic heading. */}
               {visiblePromptAnswers.map(item => (
                 <section
                   key={item.prompt}

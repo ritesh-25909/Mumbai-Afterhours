@@ -2,73 +2,47 @@
 import { supabase } from '../../lib/supabase';
 import { POLICY_VERSION } from '../../lib/constants';
 
-// ======================================================
-// PROFILE PROMPT ANSWER TYPE
-// ======================================================
-
 export type ProfilePromptAnswer = {
   prompt: string;
   answer: string;
 };
 
-// ======================================================
-// PROFILE TYPE
-// ======================================================
-
 export type Profile = {
   id: string;
-
   display_name: string;
   date_of_birth: string;
-
   gender: string;
   interested_in: string[];
-
   neighbourhood: string | null;
   bio: string | null;
-
   languages: string[];
   interests: string[];
-
   relationship_intention: string | null;
 
-  // Additional profile information
   height: string | null;
   occupation: string | null;
   college: string | null;
   education_status: string | null;
 
-  // Supabase JSONB column
   profile_prompts: ProfilePromptAnswer[] | null;
 
+  // New optional profile fields
+  smoking: string | null;
+  alcohol: string | null;
+  religion: string | null;
+
   profile_complete: boolean;
-
   visibility_status: 'visible' | 'hidden';
-
   verified: boolean;
-
-  moderation_status:
-    | 'pending'
-    | 'approved'
-    | 'rejected'
-    | 'suspended';
-
+  moderation_status: 'pending' | 'approved' | 'rejected' | 'suspended';
   show_neighbourhood: boolean;
 };
-
-// ======================================================
-// PREFERENCES TYPE
-// ======================================================
 
 export type Prefs = {
   minimum_age: number;
   maximum_age: number;
   preferred_gender: string[];
 };
-
-// ======================================================
-// PROFILE INPUT TYPE
-// ======================================================
 
 export type BasicsInput = Pick<
   Profile,
@@ -85,19 +59,13 @@ export type BasicsInput = Pick<
   | 'college'
   | 'education_status'
   | 'profile_prompts'
+  | 'smoking'
+  | 'alcohol'
+  | 'religion'
 >;
 
-// ======================================================
-// LOAD MY PROFILE
-// ======================================================
-
-export async function getMyProfile(
-  uid: string
-): Promise<Profile | null> {
-
-  if (!uid) {
-    throw new Error('User ID is missing.');
-  }
+export async function getMyProfile(uid: string): Promise<Profile | null> {
+  if (!uid) throw new Error('User ID is missing.');
 
   const { data, error } = await supabase
     .from('profiles')
@@ -106,36 +74,19 @@ export async function getMyProfile(
     .maybeSingle();
 
   if (error) {
-    console.error('getMyProfile failed:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-      uid,
-    });
-
-    throw new Error(
-      `Could not load your profile: ${error.message}`
-    );
+    console.error('getMyProfile failed:', error);
+    throw new Error(`Could not load your profile: ${error.message}`);
   }
 
   return data as Profile | null;
 }
 
-// ======================================================
-// CREATE PROFILE
-// DATE OF BIRTH CAN ONLY BE SET ON INSERT
-// ======================================================
-
 export async function createProfile(
   uid: string,
   dob: string,
   b: BasicsInput
-) {
-
-  if (!uid) {
-    throw new Error('User ID is missing.');
-  }
+): Promise<void> {
+  if (!uid) throw new Error('User ID is missing.');
 
   const { error } = await supabase
     .from('profiles')
@@ -147,13 +98,7 @@ export async function createProfile(
     });
 
   if (error) {
-    console.error('createProfile failed:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-      uid,
-    });
+    console.error('createProfile failed:', error);
 
     throw new Error(
       error.message.includes('18')
@@ -162,7 +107,6 @@ export async function createProfile(
     );
   }
 
-  // Save consent records after successful profile creation.
   const { error: consentError } = await supabase
     .from('user_consents')
     .insert([
@@ -179,23 +123,12 @@ export async function createProfile(
     ]);
 
   if (consentError) {
-    console.error('createProfile consent failed:', {
-      message: consentError.message,
-      code: consentError.code,
-      details: consentError.details,
-      hint: consentError.hint,
-      uid,
-    });
-
+    console.error('createProfile consent failed:', consentError);
     throw new Error(
       `Profile saved, but consent saving failed: ${consentError.message}`
     );
   }
 }
-
-// ======================================================
-// UPDATE EXISTING PROFILE
-// ======================================================
 
 export async function updateProfile(
   uid: string,
@@ -203,12 +136,8 @@ export async function updateProfile(
     visibility_status?: 'visible' | 'hidden';
     show_neighbourhood?: boolean;
   }
-) {
-
-  if (!uid) {
-    throw new Error('User ID is missing.');
-  }
-
+): Promise<void> {
+  if (!uid) throw new Error('User ID is missing.');
   if (!b || Object.keys(b).length === 0) {
     throw new Error('No profile changes were provided.');
   }
@@ -235,60 +164,31 @@ export async function updateProfile(
   }
 
   if (!data || data.length === 0) {
-    console.error('Profile update returned no rows:', {
-      uid,
-      payload: b,
-    });
-
     throw new Error(
-      'Profile was not updated. The record may not exist or database permissions may be blocking the update.'
+      'Profile was not updated. Check whether the record exists and database permissions allow the update.'
     );
   }
 }
 
-// ======================================================
-// LOAD USER PREFERENCES
-// ======================================================
-
-export async function getPrefs(
-  uid: string
-): Promise<Prefs | null> {
-
-  if (!uid) {
-    throw new Error('User ID is missing.');
-  }
+export async function getPrefs(uid: string): Promise<Prefs | null> {
+  if (!uid) throw new Error('User ID is missing.');
 
   const { data, error } = await supabase
     .from('user_preferences')
-    .select(
-      'minimum_age,maximum_age,preferred_gender'
-    )
+    .select('minimum_age,maximum_age,preferred_gender')
     .eq('user_id', uid)
     .maybeSingle();
 
   if (error) {
     console.error('getPrefs failed:', error);
-
-    throw new Error(
-      `Could not load preferences: ${error.message}`
-    );
+    throw new Error(`Could not load preferences: ${error.message}`);
   }
 
   return data as Prefs | null;
 }
 
-// ======================================================
-// SAVE USER PREFERENCES
-// ======================================================
-
-export async function savePrefs(
-  uid: string,
-  p: Prefs
-) {
-
-  if (!uid) {
-    throw new Error('User ID is missing.');
-  }
+export async function savePrefs(uid: string, p: Prefs): Promise<void> {
+  if (!uid) throw new Error('User ID is missing.');
 
   const { error } = await supabase
     .from('user_preferences')
@@ -299,38 +199,18 @@ export async function savePrefs(
     });
 
   if (error) {
-    console.error('savePrefs failed:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-      uid,
-    });
-
+    console.error('savePrefs failed:', error);
     throw new Error(
       `Could not save preferences [${error.code}]: ${error.message}`
     );
   }
 }
 
-// ======================================================
-// PUBLISH PROFILE
-// ======================================================
-
-export async function publishProfile() {
-
-  const { error } = await supabase.rpc(
-    'publish_profile'
-  );
+export async function publishProfile(): Promise<void> {
+  const { error } = await supabase.rpc('publish_profile');
 
   if (error) {
-    console.error('publishProfile failed:', {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
-    });
-
+    console.error('publishProfile failed:', error);
     throw new Error(
       `Could not publish profile [${error.code}]: ${error.message}`
     );
