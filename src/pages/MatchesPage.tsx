@@ -1,58 +1,184 @@
+
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, MessageCircle } from 'lucide-react';
-import { listMatches, unmatch, getSeenAt, markSeen, type MatchItem } from '../features/matches/api';
+import { Heart, X, BadgeCheck, MessageCircle } from 'lucide-react';
+import {
+  listIncomingLikes,
+  likeBack,
+  passIncomingLike,
+  type IncomingLike
+} from '../features/matches/api';
+import { listMatches } from '../features/matches/api';
 import { Modal } from '../components/ui/Modal';
 
 export default function MatchesPage() {
-  const [items, setItems] = useState<MatchItem[] | null>(null);
-  const [seenAt] = useState(getSeenAt);
+  const [items, setItems] = useState<IncomingLike[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [target, setTarget] = useState<MatchItem | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [matched, setMatched] = useState<{
+    name: string;
+    conversationId: string | null;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setErr(null);
-    try { setItems(await listMatches()); markSeen(); } catch (e) { setErr((e as Error).message); setItems([]); }
+    try {
+      setItems(await listIncomingLikes());
+    } catch (e) {
+      setErr((e as Error).message);
+      setItems([]);
+    }
   }, []);
-  useEffect(() => { load(); }, [load]);
 
-  async function confirmUnmatch() {
-    if (!target) return;
-    setBusy(true);
-    try { await unmatch(target.match_id); setTarget(null); await load(); } catch (e) { setErr((e as Error).message); setTarget(null); } finally { setBusy(false); }
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function handleAction(user: IncomingLike, action: 'like' | 'pass') {
+    if (busyId) return;
+
+    setBusyId(user.user_id);
+    setErr(null);
+
+    try {
+      if (action === 'like') {
+        const result = await likeBack(user.user_id);
+
+        if (result.matched) {
+          const matches = await listMatches();
+          const match = matches.find(m => m.user_id === user.user_id);
+
+          setMatched({
+            name: user.display_name,
+            conversationId: match?.conversation_id ?? null
+          });
+        }
+      } else {
+        await passIncomingLike(user.user_id);
+      }
+
+      setItems(current =>
+        current?.filter(item => item.user_id !== user.user_id) ?? []
+      );
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
   }
 
-  if (!items) return <p className="text-slate2" role="status">Loading your matches…</p>;
-  const isNew = (m: MatchItem) => !seenAt || m.matched_at > seenAt;
+  if (!items) {
+    return <p className="text-slate2" role="status">Loading likes…</p>;
+  }
+
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-extrabold">Matches</h1>
-      {err && <p role="alert" className="text-bad">{err} <button className="underline" onClick={load}>Retry</button></p>}
+      <h1 className="text-2xl font-extrabold">Liked You</h1>
+
+      <p className="text-sm text-slate2">
+        These people liked your profile. Like them back to make a match!
+      </p>
+
+      {err && (
+        <p role="alert" className="text-bad">
+          {err}
+          <button className="ml-2 underline" onClick={load}>
+            Retry
+          </button>
+        </p>
+      )}
+
       {items.length === 0 && !err ? (
-        <div className="card p-8 text-center"><p className="font-bold">No matches yet</p>
-          <p className="mt-1 text-slate2">When you and someone else like each other, they will appear here.</p>
-          <Link to="/discover" className="btn-primary mt-4">Go to Discover</Link></div>
+        <div className="card p-8 text-center">
+          <Heart className="mx-auto h-10 w-10 text-royal" />
+          <p className="mt-3 font-bold">No likes yet</p>
+          <p className="mt-1 text-slate2">
+            When someone likes your profile, you'll find them here.
+          </p>
+          <Link to="/discover" className="btn-primary mt-4 inline-block">
+            Go to Discover
+          </Link>
+        </div>
       ) : (
         <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
-          {items.map(m => (
-            <li key={m.match_id} className="card overflow-hidden">
+          {items.map(user => (
+            <li key={user.user_id} className="card overflow-hidden">
               <div className="relative aspect-[3/4] bg-mist">
-                {m.photoUrl && <img src={m.photoUrl} alt={`${m.display_name}`} loading="lazy" className="h-full w-full object-cover" />}
-                {isNew(m) && <span className="absolute left-2 top-2 rounded-full bg-royal px-3 py-1 text-sm font-bold text-white">New</span>}
+                {user.photoUrl && (
+                  <img
+                    src={user.photoUrl}
+                    alt={user.display_name}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                )}
+                <span className="absolute left-2 top-2 rounded-full bg-royal px-3 py-1 text-sm font-bold text-white">
+                  Likes you
+                </span>
               </div>
-              <div className="space-y-2 p-3">
-                <p className="flex items-center gap-1 font-extrabold">{m.display_name}, {m.age}{m.verified && <BadgeCheck className="h-5 w-5 text-royal" aria-label="Verified" />}</p>
-                <p className="text-sm text-slate2">Matched {new Date(m.matched_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                <Link to={`/chat/${m.conversation_id}`} className="btn-primary w-full py-2"><MessageCircle className="h-5 w-5" aria-hidden />Start conversation</Link>
-                <button className="w-full text-sm text-slate2 underline" onClick={() => setTarget(m)}>Unmatch</button>
+
+              <div className="space-y-3 p-3">
+                <p className="flex items-center gap-1 font-extrabold">
+                  {user.display_name}, {user.age}
+                  {user.verified && (
+                    <BadgeCheck className="h-5 w-5 text-royal" />
+                  )}
+                </p>
+
+                <p className="text-sm text-slate2">
+                  Liked {new Date(user.liked_at).toLocaleDateString('en-IN')}
+                </p>
+
+                <button
+                  disabled={busyId !== null}
+                  onClick={() => handleAction(user, 'like')}
+                  className="btn-primary flex w-full items-center justify-center gap-2 py-2 disabled:opacity-50"
+                >
+                  <Heart className="h-5 w-5" />
+                  {busyId === user.user_id ? 'Processing…' : 'Like Back'}
+                </button>
+
+                <button
+                  disabled={busyId !== null}
+                  onClick={() => handleAction(user, 'pass')}
+                  className="btn-outline flex w-full items-center justify-center gap-2 py-2 disabled:opacity-50"
+                >
+                  <X className="h-5 w-5" />
+                  Pass
+                </button>
               </div>
-            </li>))}
-        </ul>)}
-      <Modal open={!!target} onClose={() => setTarget(null)} title={`Unmatch ${target?.display_name ?? ''}?`}>
-        <p className="text-slate2">You will no longer be able to message each other, and you will not see each other again. This cannot be undone.</p>
-        <div className="flex gap-3"><button className="btn-outline flex-1" onClick={() => setTarget(null)}>Cancel</button>
-          <button className="btn-primary flex-1" disabled={busy} onClick={confirmUnmatch}>{busy ? 'Unmatching…' : 'Unmatch'}</button></div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Modal
+        open={!!matched}
+        onClose={() => setMatched(null)}
+        title="It's a match! ❤️"
+      >
+        <p>
+          You and {matched?.name} like each other. Your conversation is ready!
+        </p>
+
+        <div className="mt-4 flex gap-3">
+          <button
+            className="btn-outline flex-1"
+            onClick={() => setMatched(null)}
+          >
+            Continue
+          </button>
+
+          {matched?.conversationId && (
+            <Link
+              to={`/chat/${matched.conversationId}`}
+              className="btn-primary flex flex-1 items-center justify-center gap-2"
+            >
+              <MessageCircle className="h-5 w-5" />
+              Message
+            </Link>
+          )}
+        </div>
       </Modal>
     </div>
   );

@@ -72,7 +72,7 @@ export default function DiscoverPage() {
       <Modal open={!!matched} onClose={() => setMatched(null)} title="It's a match">
         <p>You and {matched?.display_name} like each other.</p>
         <div className="flex gap-3"><button className="btn-outline flex-1" onClick={() => setMatched(null)}>Keep swiping</button>
-          <Link to="/matches" className="btn-primary flex-1">See matches</Link></div>
+          <Link to="/matches" className="btn-primary flex-1">See Liked You</Link></div>
       </Modal>
     </div>
   );

@@ -9,6 +9,7 @@ import { AppShell } from '../components/layout/AppShell';
 
 import OnboardingPage from '../pages/OnboardingPage';
 import ProfileSettingsPage from '../pages/ProfileSettingsPage';
+import UserProfilePage from '../pages/UserProfilePage';
 import SelfieVerificationPage from '../pages/SelfieVerificationPage';
 import ModerationPage from '../pages/ModerationPage';
 import DiscoverPage from '../pages/DiscoverPage';
@@ -60,6 +61,13 @@ export const router = createBrowserRouter(
                 { path: '/matches', element: <MatchesPage /> },
                 { path: '/inbox', element: <ChatPage /> },
                 { path: '/chat/:id', element: <ChatPage /> },
+
+                // Matched user's full profile
+                {
+                  path: '/user/:userId',
+                  element: <UserProfilePage />
+                },
+
                 { path: '/profile', element: <ProfileSettingsPage /> },
                 { path: '/verify', element: <SelfieVerificationPage /> },
                 { path: '/moderation', element: <ModerationPage /> },
