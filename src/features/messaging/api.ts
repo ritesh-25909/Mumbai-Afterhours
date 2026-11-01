@@ -39,7 +39,12 @@ export type ConversationHeader = {
 
 // ─── CONVERSATION LIST ───────────────────────────────────
 
-export async function listConversations(): Promise<ConversationItem[]> {
+// Conversations are returned immediately.
+// Photo URLs are resolved independently in the background.
+
+export async function listConversations(
+  onPhotosLoaded?: (items: ConversationItem[]) => void
+): Promise<ConversationItem[]> {
   const { data, error } = await supabase.rpc('list_conversations');
 
   if (error) {
@@ -50,30 +55,40 @@ export async function listConversations(): Promise<ConversationItem[]> {
 
   const rows = (data ?? []) as Omit<ConversationItem, 'photoUrl'>[];
 
-  if (rows.length === 0) {
-    return [];
-  }
-
-  // Sign all conversation photos in one request.
-  const photoPaths = rows
-    .map(row => row.photo_path)
-    .filter((path): path is string => !!path);
-
-  let urls: Record<string, string> = {};
-
-  try {
-    urls = await signPhotoPaths(photoPaths);
-  } catch {
-    // Do not prevent the conversation list from displaying
-    // if profile photos fail to load.
-  }
-
-  return rows.map(row => ({
+  const items: ConversationItem[] = rows.map(row => ({
     ...row,
-    photoUrl: row.photo_path
-      ? urls[row.photo_path] ?? null
-      : null
+    photoUrl: null
   }));
+
+  if (!items.length) return items;
+
+  // Sign profile photos without blocking the conversation list.
+  const photoPaths = [
+    ...new Set(
+      rows
+        .map(row => row.photo_path)
+        .filter((path): path is string => !!path)
+    )
+  ];
+
+  if (photoPaths.length && onPhotosLoaded) {
+    void signPhotoPaths(photoPaths)
+      .then(urls => {
+        const updated = items.map(item => ({
+          ...item,
+          photoUrl: item.photo_path
+            ? urls[item.photo_path] ?? null
+            : null
+        }));
+
+        onPhotosLoaded(updated);
+      })
+      .catch(() => {
+        // Photos must never block conversations.
+      });
+  }
+
+  return items;
 }
 
 // ─── SINGLE CONVERSATION HEADER ──────────────────────────
@@ -94,12 +109,8 @@ export async function getConversation(
     data as Omit<ConversationHeader, 'photoUrl'>[] | null
   )?.[0];
 
-  if (!row) {
-    return null;
-  }
+  if (!row) return null;
 
-  // Return the header immediately.
-  // The photo URL will be loaded separately by ConversationView.
   return {
     ...row,
     photoUrl: null
@@ -134,8 +145,6 @@ export async function fetchMessages(
     );
   }
 
-  // Database returns newest first.
-  // Reverse to display messages in chronological order.
   return ((data ?? []) as Msg[]).reverse();
 }
 
@@ -154,9 +163,6 @@ export class SendError extends Error {
 
 // ─── SEND MESSAGE ────────────────────────────────────────
 
-// Client-generated IDs make retries safe.
-// A duplicate ID means the original message may already have arrived.
-
 export async function sendMessage(
   id: string,
   conv: string,
@@ -172,16 +178,10 @@ export async function sendMessage(
       content
     });
 
-  if (!error) {
-    return;
-  }
+  if (!error) return;
 
   if (error.code === '23505') {
-    throw new SendError(
-      'Already sent.',
-      false,
-      true
-    );
+    throw new SendError('Already sent.', false, true);
   }
 
   if (error.code === '42501') {
@@ -212,9 +212,7 @@ export const markRead = (conv: string) =>
 export async function unreadTotal(): Promise<number> {
   const { data, error } = await supabase.rpc('unread_total');
 
-  if (error) {
-    return 0;
-  }
+  if (error) return 0;
 
   return (data as number) ?? 0;
 }
