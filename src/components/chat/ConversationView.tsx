@@ -105,14 +105,14 @@ export function ConversationView({
   // ─── READ RECEIPTS ─────────────────────────────────────
 
   const read = useCallback(() => {
-    if (document.visibilityState !== 'visible') return;
+  if (document.visibilityState !== 'visible') return;
 
-    void markRead(id)
-      .then(() => onRead())
-      .catch(() => {
-        // Read receipts should not block the chat.
-      });
-  }, [id, onRead]);
+  void Promise.resolve(markRead(id))
+    .then(() => onRead())
+    .catch(() => {
+      // Read receipts should not block the chat.
+    });
+}, [id, onRead]);
 
   // ─── FAST CONVERSATION LOADING ─────────────────────────
 
