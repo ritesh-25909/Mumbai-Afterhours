@@ -367,27 +367,25 @@ export function PhotoSlots({
                 )}
               </div>
 
-              <input
-                ref={element => {
-                  inputs.current[order - 1] = element;
-                }}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                capture="user"
-                hidden
-                aria-label={LABELS[order - 1]}
-                onChange={event => {
-                  const file = event.target.files?.[0];
+             <input
+  ref={element => {
+    inputs.current[order - 1] = element;
+  }}
+  type="file"
+  accept="image/*"
+  hidden
+  aria-label={LABELS[order - 1]}
+  onChange={event => {
+    const file = event.target.files?.[0];
 
-                  // Allow selecting the same file again after a failed upload.
-                  event.target.value = '';
+    // Allow selecting the same image again.
+    event.target.value = '';
 
-                  if (file) {
-                    void handle(order, file);
-                  }
-                }}
-              />
-
+    if (file) {
+      void handle(order, file);
+    }
+  }}
+/>
               {errors[order] && (
                 <p role="alert" className="mt-1 text-sm text-bad">
                   {errors[order]}{' '}
