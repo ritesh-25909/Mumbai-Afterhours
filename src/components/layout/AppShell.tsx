@@ -42,6 +42,21 @@ const modLink = {
   icon: ShieldCheck,
 };
 
+const mobileLinks = [
+  base[0],
+  base[2],
+  base[1],
+  settingsLink,
+  base[3],
+];
+
+const MOBILE_HEADER_PATHS = [
+  '/matches',
+  '/inbox',
+  '/settings',
+  '/profile',
+];
+
 export function AppShell() {
   const { session } = useAuth();
 
@@ -55,7 +70,7 @@ export function AppShell() {
 }
 
 /* =====================================================
-   BRAND HEADER
+   DESKTOP BRAND
 ===================================================== */
 
 function Brand() {
@@ -98,7 +113,15 @@ function ShellBody() {
 
   const { notice, dismiss } = useMatchNotifications(session?.user.id);
 
+  /* Only show the mobile header on the four selected
+     main pages. Discover and secondary pages have none. */
+
+  const showMobileHeader = MOBILE_HEADER_PATHS.includes(
+    loc.pathname
+  );
+
   /* Load unread messages */
+
   useEffect(() => {
     let active = true;
 
@@ -114,6 +137,7 @@ function ShellBody() {
   }, [loc.pathname]);
 
   /* Listen for new messages */
+
   useMessageEvents(() => {
     window.setTimeout(() => {
       unreadTotal()
@@ -123,6 +147,7 @@ function ShellBody() {
   });
 
   /* Check moderator/admin permissions */
+
   useEffect(() => {
     let active = true;
 
@@ -143,9 +168,16 @@ function ShellBody() {
   }, []);
 
   const links = isMod ? [...base, modLink] : base;
-  const sidebarLinks = [...links, settingsLink];
 
-  /* Desktop navigation styles */
+  const sidebarLinks = [
+    ...links,
+    settingsLink,
+  ];
+
+  /* =====================================================
+     DESKTOP SIDEBAR STYLES
+  ===================================================== */
+
   const sidebarLinkClass = ({
     isActive,
   }: {
@@ -174,7 +206,10 @@ function ShellBody() {
           ].join(' '),
     ].join(' ');
 
-  /* Mobile navigation styles */
+  /* =====================================================
+     MOBILE NAVIGATION STYLES
+  ===================================================== */
+
   const mobileTabClass = ({
     isActive,
   }: {
@@ -190,7 +225,9 @@ function ShellBody() {
   return (
     <div className="min-h-screen bg-[#f4f6fb] md:flex">
 
-      {/* DESKTOP SIDEBAR */}
+      {/* =================================================
+          DESKTOP SIDEBAR
+      ================================================= */}
 
       <aside
         className="
@@ -223,7 +260,7 @@ function ShellBody() {
         }}
       >
 
-        {/* BRANDING */}
+        {/* DESKTOP BRANDING */}
 
         <Link
           to="/discover"
@@ -239,7 +276,7 @@ function ShellBody() {
           <Brand />
         </Link>
 
-        {/* NAVIGATION */}
+        {/* DESKTOP NAVIGATION */}
 
         <nav
           className="relative flex flex-col gap-3"
@@ -296,7 +333,7 @@ function ShellBody() {
           ))}
         </nav>
 
-        {/* LOGOUT */}
+        {/* DESKTOP LOGOUT */}
 
         <div className="relative mt-auto border-t border-blue-300/[0.15] pt-5">
           <button
@@ -333,48 +370,69 @@ function ShellBody() {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
+      {/* =================================================
+          MAIN CONTENT
+      ================================================= */}
 
       <div className="min-w-0 flex-1 pb-20 md:pb-0">
 
-        {/* MOBILE HEADER */}
+        {/* =================================================
+            COMPACT MOBILE HEADER
 
-        <header
-          className="
-            sticky top-0 z-30
-            flex items-center justify-between
-            border-b border-blue-300/15
-            bg-[#07152b]
-            px-3 py-2.5
-            shadow-lg md:hidden
-          "
-        >
-          <Link
-            to="/discover"
-            aria-label="Mumbai Afterhours home"
-            className="min-w-0 flex-1"
-          >
-            <Brand />
-          </Link>
+            Hidden on:
+            - Discover
+            - Individual Chat
+            - Individual User Profile
+            - Verification
+            - Subscription
+            - Privacy settings
+            - Moderation
+            - All other secondary pages
+        ================================================= */}
 
-          <button
-            type="button"
-            onClick={signOut}
-            aria-label="Log out"
+        {showMobileHeader && (
+          <header
             className="
-              ml-3 grid h-11 w-11 shrink-0
-              place-items-center rounded-xl
-              border border-white/10
-              bg-white/[0.05] text-slate-200
-              transition hover:border-blue-400/30
-              hover:bg-blue-500/10 hover:text-white
+              sticky top-0 z-30
+              flex h-[52px] items-center justify-between
+              border-b border-blue-300/15
+              bg-[#07152b]
+              px-4
+              shadow-md
+              md:hidden
             "
           >
-            <LogOut className="h-5 w-5" />
-          </button>
-        </header>
+            <Link
+              to="/discover"
+              aria-label="Mumbai Afterhours home"
+              className="flex min-w-0 items-center"
+            >
+              <span className="truncate text-[16px] font-bold tracking-tight text-white">
+                Mumbai <span className="text-blue-400">Afterhours</span>
+              </span>
+            </Link>
 
-        {/* MATCH NOTIFICATION */}
+            <button
+              type="button"
+              onClick={signOut}
+              aria-label="Log out"
+              className="
+                ml-3 grid h-9 w-9 shrink-0
+                place-items-center rounded-xl
+                border border-white/10
+                bg-white/[0.05] text-slate-200
+                transition hover:border-blue-400/30
+                hover:bg-blue-500/10 hover:text-white
+              "
+            >
+              <LogOut className="h-[17px] w-[17px]" />
+            </button>
+          </header>
+        )}
+
+        {/* =================================================
+            MATCH NOTIFICATION
+        ================================================= */}
 
         {notice && (
           <div
@@ -410,27 +468,34 @@ function ShellBody() {
           </div>
         )}
 
-        {/* PAGE CONTENT */}
+        {/* =================================================
+            PAGE CONTENT
+        ================================================= */}
 
-        <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 md:py-8">
+        <main className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:py-8">
           <Outlet />
         </main>
       </div>
 
-      {/* MOBILE BOTTOM NAVIGATION */}
+      {/* =================================================
+          MOBILE BOTTOM NAVIGATION
+
+          Always shows all five main tabs.
+      ================================================= */}
 
       <nav
         className="
           fixed inset-x-0 bottom-0 z-40
           flex border-t border-blue-300/[0.12]
           bg-[#040d20]/95
-          px-2 pb-[env(safe-area-inset-bottom)] pt-2
+          px-1 pb-[env(safe-area-inset-bottom)] pt-2
           shadow-[0_-10px_30px_-18px_rgba(0,0,0,0.8)]
-          backdrop-blur-xl md:hidden
+          backdrop-blur-xl
+          md:hidden
         "
         aria-label="Main navigation"
       >
-        {links.map((item) => (
+        {mobileLinks.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -444,7 +509,7 @@ function ShellBody() {
 
                 <span className="relative">
                   <item.icon
-                    className="h-[22px] w-[22px]"
+                    className="h-[21px] w-[21px]"
                     strokeWidth={isActive ? 2.2 : 1.8}
                     aria-hidden="true"
                   />
