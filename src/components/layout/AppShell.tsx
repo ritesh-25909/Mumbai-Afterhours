@@ -10,6 +10,8 @@ import {
   ShieldCheck,
   Settings,
   ChevronRight,
+  MapPin,
+  X,
 } from 'lucide-react';
 
 import { useAuth } from '../../features/auth/AuthProvider';
@@ -113,9 +115,6 @@ function ShellBody() {
 
   const { notice, dismiss } = useMatchNotifications(session?.user.id);
 
-  /* Only show the mobile header on the four selected
-     main pages. Discover and secondary pages have none. */
-
   const showMobileHeader = MOBILE_HEADER_PATHS.includes(
     loc.pathname
   );
@@ -174,9 +173,7 @@ function ShellBody() {
     settingsLink,
   ];
 
-  /* =====================================================
-     DESKTOP SIDEBAR STYLES
-  ===================================================== */
+  /* DESKTOP SIDEBAR STYLES */
 
   const sidebarLinkClass = ({
     isActive,
@@ -206,9 +203,7 @@ function ShellBody() {
           ].join(' '),
     ].join(' ');
 
-  /* =====================================================
-     MOBILE NAVIGATION STYLES
-  ===================================================== */
+  /* MOBILE NAVIGATION STYLES */
 
   const mobileTabClass = ({
     isActive,
@@ -225,9 +220,7 @@ function ShellBody() {
   return (
     <div className="min-h-screen bg-[#f4f6fb] md:flex">
 
-      {/* =================================================
-          DESKTOP SIDEBAR
-      ================================================= */}
+      {/* DESKTOP SIDEBAR */}
 
       <aside
         className="
@@ -370,25 +363,11 @@ function ShellBody() {
         </div>
       </aside>
 
-      {/* =================================================
-          MAIN CONTENT
-      ================================================= */}
+      {/* MAIN CONTENT */}
 
       <div className="min-w-0 flex-1 pb-20 md:pb-0">
 
-        {/* =================================================
-            COMPACT MOBILE HEADER
-
-            Hidden on:
-            - Discover
-            - Individual Chat
-            - Individual User Profile
-            - Verification
-            - Subscription
-            - Privacy settings
-            - Moderation
-            - All other secondary pages
-        ================================================= */}
+        {/* COMPACT MOBILE HEADER */}
 
         {showMobileHeader && (
           <header
@@ -430,9 +409,7 @@ function ShellBody() {
           </header>
         )}
 
-        {/* =================================================
-            MATCH NOTIFICATION
-        ================================================= */}
+        {/* MATCH NOTIFICATION */}
 
         {notice && (
           <div
@@ -468,20 +445,18 @@ function ShellBody() {
           </div>
         )}
 
-        {/* =================================================
-            PAGE CONTENT
-        ================================================= */}
+        {/* GLOBAL DISCOVER NEARBY REMINDER */}
+
+        <NearbyLocationReminder uid={session!.user.id} />
+
+        {/* PAGE CONTENT */}
 
         <main className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:py-8">
           <Outlet />
         </main>
       </div>
 
-      {/* =================================================
-          MOBILE BOTTOM NAVIGATION
-
-          Always shows all five main tabs.
-      ================================================= */}
+      {/* MOBILE BOTTOM NAVIGATION */}
 
       <nav
         className="
@@ -527,6 +502,125 @@ function ShellBody() {
           </NavLink>
         ))}
       </nav>
+    </div>
+  );
+}
+
+/* =====================================================
+   GLOBAL GPS PERMISSION REMINDER
+===================================================== */
+
+function NearbyLocationReminder({ uid }: { uid: string }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    let timer: number | undefined;
+    let permissionStatus: PermissionStatus | null = null;
+
+    const updateVisibility = () => {
+      if (!active) return;
+
+      if (permissionStatus?.state === 'granted') {
+        setVisible(false);
+      } else {
+        setVisible(true);
+      }
+    };
+
+    const checkPermission = async () => {
+      if (!navigator.permissions?.query) {
+        if (active) setVisible(true);
+        return;
+      }
+
+      try {
+        permissionStatus = await navigator.permissions.query({
+          name: 'geolocation',
+        });
+
+        if (!active) return;
+
+        permissionStatus.addEventListener(
+          'change',
+          updateVisibility
+        );
+
+        updateVisibility();
+      } catch {
+        if (active) setVisible(true);
+      }
+    };
+
+    // Check on every authenticated login.
+    void checkPermission();
+
+    // Repeat every five minutes while permission is not granted.
+    timer = window.setInterval(() => {
+      if (active && permissionStatus?.state !== 'granted') {
+        setVisible(true);
+      }
+    }, 5 * 60 * 1000);
+
+    return () => {
+      active = false;
+
+      if (timer !== undefined) {
+        window.clearInterval(timer);
+      }
+
+      permissionStatus?.removeEventListener(
+        'change',
+        updateVisibility
+      );
+    };
+  }, [uid]);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      role="status"
+      className="
+        flex items-center justify-between gap-3
+        border-b border-blue-200
+        bg-gradient-to-r from-blue-50 to-white
+        px-4 py-3
+      "
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-royal/10 text-royal">
+          <MapPin className="h-5 w-5" />
+        </span>
+
+        <div className="min-w-0">
+          <p className="font-bold text-ink">
+            Discover nearby
+          </p>
+
+          <p className="text-xs text-slate2">
+            Enable GPS to see approximate distances.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-2">
+        <Link
+          to="/discover"
+          className="rounded-xl bg-royal px-3 py-2 text-xs font-bold text-white"
+        >
+          Enable GPS
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => setVisible(false)}
+          aria-label="Dismiss notification"
+          className="rounded-lg p-2 text-slate2 hover:bg-blue-100"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

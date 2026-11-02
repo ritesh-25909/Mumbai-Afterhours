@@ -4,12 +4,15 @@ import { Link } from 'react-router-dom';
 import { MapPin, Navigation, RefreshCw } from 'lucide-react';
 
 import { useAuth } from '../features/auth/AuthProvider';
+import { useMyProfile } from '../features/profiles/useMyProfile';
+
 import {
   fetchCandidates,
   likeUser,
   passUser,
   type Candidate,
 } from '../features/discovery/api';
+
 import { localMatches } from '../features/matches/useMatchNotifications';
 import { ProfileCard } from '../components/discover/ProfileCard';
 import { ReportBlock } from '../components/discover/ReportBlock';
@@ -30,6 +33,8 @@ export default function DiscoverPage() {
   const { session } = useAuth();
   const uid = session!.user.id;
 
+  const { profile, loading: profileLoading } = useMyProfile();
+
   const [queue, setQueue] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [exhausted, setExhausted] = useState(false);
@@ -39,11 +44,20 @@ export default function DiscoverPage() {
 
   const [myLocation, setMyLocation] =
     useState<Coordinates | null>(null);
+
   const [locationLoading, setLocationLoading] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
   const handled = useRef(new Set<string>());
   const loadingMore = useRef(false);
+
+  // Saved profile neighbourhood is the fallback when GPS is unavailable.
+  const neighbourhoodLocation = getNeighbourhoodCoordinates(
+    profile?.neighbourhood ?? null
+  );
+
+  // GPS takes priority. Otherwise, use the saved neighbourhood.
+  const effectiveLocation = myLocation ?? neighbourhoodLocation;
 
   const load = useCallback(async () => {
     if (loadingMore.current) return;
@@ -77,7 +91,7 @@ export default function DiscoverPage() {
   }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   useEffect(() => {
@@ -87,7 +101,7 @@ export default function DiscoverPage() {
       queue.length < 3 &&
       !exhausted
     ) {
-      load();
+      void load();
     }
   }, [queue.length, loading, exhausted, load]);
 
@@ -98,6 +112,7 @@ export default function DiscoverPage() {
     try {
       const coordinates = await getCurrentLocation();
       setMyLocation(coordinates);
+      setLocationError(null);
     } catch (e) {
       setLocationError((e as Error).message);
       setMyLocation(null);
@@ -113,14 +128,17 @@ export default function DiscoverPage() {
       ? {
           ...current,
           distanceKm: (() => {
-            if (!myLocation) return null;
+            if (!effectiveLocation) return null;
 
-            const profileLocation =
+            const candidateLocation =
               getNeighbourhoodCoordinates(current.neighbourhood);
 
-            if (!profileLocation) return null;
+            if (!candidateLocation) return null;
 
-            return getDistanceKm(myLocation, profileLocation);
+            return getDistanceKm(
+              effectiveLocation,
+              candidateLocation
+            );
           })(),
         }
       : null;
@@ -150,10 +168,10 @@ export default function DiscoverPage() {
 
       advance();
     } catch (e) {
-      const m = (e as Error).message;
-      setErr(m);
+      const message = (e as Error).message;
+      setErr(message);
 
-      if (m.includes('no longer available')) {
+      if (message.includes('no longer available')) {
         advance();
       }
     } finally {
@@ -161,7 +179,7 @@ export default function DiscoverPage() {
     }
   }
 
-  if (loading) {
+  if (loading || profileLoading) {
     return (
       <p className="text-center text-slate2" role="status">
         Finding people for you…
@@ -172,6 +190,7 @@ export default function DiscoverPage() {
   return (
     <div className="space-y-4">
       {/* LOCATION CONTROL */}
+
       <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 rounded-2xl border border-line bg-white p-3 shadow-sm">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-royal/10 text-royal">
@@ -180,13 +199,19 @@ export default function DiscoverPage() {
 
           <div className="min-w-0">
             <p className="font-bold text-ink">
-              {myLocation ? 'Location enabled' : 'Discover nearby'}
+              {myLocation
+                ? 'Location enabled'
+                : neighbourhoodLocation
+                  ? 'Using your neighbourhood'
+                  : 'Discover nearby'}
             </p>
 
             <p className="text-xs text-slate2">
               {myLocation
-                ? 'Showing approximate neighbourhood distances'
-                : 'Enable GPS to see approximate distances'}
+                ? 'Showing approximate distances from GPS'
+                : neighbourhoodLocation
+                  ? `Approximate distances from ${profile?.neighbourhood}`
+                  : 'Add your neighbourhood to your profile for distance estimates'}
             </p>
           </div>
         </div>
@@ -207,7 +232,7 @@ export default function DiscoverPage() {
             ? 'Locating'
             : myLocation
               ? 'Refresh'
-              : 'Use my location'}
+              : 'Enable GPS'}
         </button>
       </div>
 
@@ -271,7 +296,7 @@ export default function DiscoverPage() {
               onClick={() => {
                 setExhausted(false);
                 setLoading(true);
-                load();
+                void load();
               }}
             >
               Check again
