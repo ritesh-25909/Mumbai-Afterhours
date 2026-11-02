@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    // Subscribe immediately to authentication changes.
+    // Listen for login, logout, token refresh and session changes.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
@@ -41,18 +41,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // Restore the existing authenticated session.
+    // Restore and validate the stored authentication session.
     const initializeAuth = async () => {
       try {
-        const { data, error } = await supabase.auth.getSession();
+        const {
+          data: { session: storedSession },
+          error: sessionError,
+        } = await supabase.auth.getSession();
 
-        if (error) throw error;
+        if (sessionError) {
+          throw sessionError;
+        }
 
+        if (!storedSession) {
+          if (active) {
+            setSession(null);
+          }
+          return;
+        }
+
+        // Verify that the user still exists in Supabase Auth.
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser(storedSession.access_token);
+
+        if (userError || !user) {
+          console.warn(
+            'Stored authentication session is invalid:',
+            userError
+          );
+
+          await supabase.auth.signOut({ scope: 'local' });
+
+          if (active) {
+            setSession(null);
+          }
+          return;
+        }
+
+        // Keep the verified session.
         if (active) {
-          setSession(data.session);
+          setSession(storedSession);
         }
       } catch (error) {
-        console.error('Authentication initialization failed:', error);
+        console.error(
+          'Authentication initialization failed:',
+          error
+        );
+
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch (signOutError) {
+          console.error(
+            'Failed to clear invalid local session:',
+            signOutError
+          );
+        }
 
         if (active) {
           setSession(null);
@@ -64,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    initializeAuth();
+    void initializeAuth();
 
     return () => {
       active = false;
@@ -72,10 +117,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Sign out from the current browser session.
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
 
-    if (error) throw error;
+    if (error) {
+      throw error;
+    }
+
+    setSession(null);
   };
 
   return (
