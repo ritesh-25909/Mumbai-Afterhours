@@ -6,7 +6,7 @@ import {
   BadgeCheck,
   MoreHorizontal,
   Send,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
 
 import {
@@ -17,15 +17,16 @@ import {
   SendError,
   PAGE,
   type ConversationHeader,
-  type Msg
+  type Msg,
 } from '../../features/messaging/api';
 
 import { signPhotoPaths } from '../../features/discovery/api';
 import { supabase } from '../../lib/supabase';
 import { unmatch } from '../../features/matches/api';
+
 import {
   useMessageEvents,
-  useRealtimeLive
+  useRealtimeLive,
 } from '../../features/messaging/ChatEvents';
 
 import { ReportBlock } from '../discover/ReportBlock';
@@ -35,16 +36,18 @@ type UIMsg = Msg & {
   status?: 'sending' | 'failed';
 };
 
-// ─── MESSAGE HELPERS ─────────────────────────────────────
+/* =====================================================
+   MESSAGE HELPERS
+===================================================== */
 
 const merge = (a: UIMsg[], b: UIMsg[]) => {
   const map = new Map<string, UIMsg>();
 
-  [...a, ...b].forEach(m => {
+  [...a, ...b].forEach((m) => {
     map.set(m.id, {
       ...map.get(m.id),
       ...m,
-      status: m.status ?? undefined
+      status: m.status ?? undefined,
     });
   });
 
@@ -57,21 +60,23 @@ const dayLabel = (iso: string) =>
   new Date(iso).toLocaleDateString('en-IN', {
     weekday: 'short',
     day: 'numeric',
-    month: 'short'
+    month: 'short',
   });
 
 const timeLabel = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-IN', {
     hour: 'numeric',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 
-// ─── CONVERSATION VIEW ───────────────────────────────────
+/* =====================================================
+   CONVERSATION VIEW
+===================================================== */
 
 export function ConversationView({
   id,
   uid,
-  onRead
+  onRead,
 }: {
   id: string;
   uid: string;
@@ -98,10 +103,9 @@ export function ConversationView({
 
   const bottom = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
-
   const loadVersion = useRef(0);
 
-  // ─── READ RECEIPTS ─────────────────────────────────────
+  /* READ RECEIPTS */
 
   const read = useCallback(() => {
     if (document.visibilityState !== 'visible') return;
@@ -113,7 +117,7 @@ export function ConversationView({
       });
   }, [id, onRead]);
 
-  // ─── FAST CONVERSATION LOADING ─────────────────────────
+  /* FAST CONVERSATION LOADING */
 
   const load = useCallback(async () => {
     const version = ++loadVersion.current;
@@ -129,7 +133,7 @@ export function ConversationView({
     stick.current = true;
 
     const headerTask = getConversation(id)
-      .then(h => {
+      .then((h) => {
         if (version !== loadVersion.current) return;
 
         setHead(h);
@@ -141,10 +145,10 @@ export function ConversationView({
 
         if (h?.photo_path) {
           void signPhotoPaths([h.photo_path])
-            .then(urls => {
+            .then((urls) => {
               if (version !== loadVersion.current) return;
 
-              setHead(current => {
+              setHead((current) => {
                 if (
                   !current ||
                   current.conversation_id !== id
@@ -154,7 +158,7 @@ export function ConversationView({
 
                 return {
                   ...current,
-                  photoUrl: urls[h.photo_path!] ?? null
+                  photoUrl: urls[h.photo_path!] ?? null,
                 };
               });
             })
@@ -163,7 +167,7 @@ export function ConversationView({
             });
         }
       })
-      .catch(e => {
+      .catch((e) => {
         if (version !== loadVersion.current) return;
 
         setErr((e as Error).message);
@@ -171,14 +175,14 @@ export function ConversationView({
       });
 
     const messagesTask = fetchMessages(id)
-      .then(m => {
+      .then((m) => {
         if (version !== loadVersion.current) return;
 
         setMsgs(m);
         setHasMore(m.length === PAGE);
         stick.current = true;
       })
-      .catch(e => {
+      .catch((e) => {
         if (version !== loadVersion.current) return;
 
         setErr((e as Error).message);
@@ -186,11 +190,11 @@ export function ConversationView({
 
     await Promise.allSettled([
       headerTask,
-      messagesTask
+      messagesTask,
     ]);
   }, [id, read]);
 
-  // ─── INITIAL LOAD AND CLEANUP ──────────────────────────
+  /* INITIAL LOAD AND CLEANUP */
 
   useEffect(() => {
     void load();
@@ -200,32 +204,32 @@ export function ConversationView({
     };
   }, [load]);
 
-  // ─── AUTO SCROLL ───────────────────────────────────────
+  /* AUTO SCROLL */
 
   useEffect(() => {
     if (stick.current) {
       bottom.current?.scrollIntoView({
         block: 'end',
-        behavior: 'auto'
+        behavior: 'auto',
       });
     }
   }, [msgs]);
 
-  // ─── REALTIME MESSAGES ─────────────────────────────────
+  /* REALTIME MESSAGES */
 
-  useMessageEvents(m => {
+  useMessageEvents((m) => {
     if (m.conversation_id !== id) return;
 
     stick.current = true;
 
-    setMsgs(current => merge(current, [m]));
+    setMsgs((current) => merge(current, [m]));
 
     if (m.sender_user_id !== uid) {
       read();
     }
   });
 
-  // ─── FALLBACK POLLING ──────────────────────────────────
+  /* FALLBACK POLLING */
 
   useEffect(() => {
     if (live || !head?.is_open) return;
@@ -234,10 +238,10 @@ export function ConversationView({
 
     const t = window.setInterval(() => {
       void fetchMessages(id)
-        .then(m => {
+        .then((m) => {
           if (cancelled) return;
 
-          setMsgs(current => merge(current, m));
+          setMsgs((current) => merge(current, m));
           read();
         })
         .catch(() => {
@@ -251,7 +255,7 @@ export function ConversationView({
     };
   }, [live, head?.is_open, id, read]);
 
-  // ─── LOAD OLDER MESSAGES ───────────────────────────────
+  /* LOAD OLDER MESSAGES */
 
   async function loadEarlier() {
     if (!msgs.length || !hasMore) return;
@@ -264,18 +268,18 @@ export function ConversationView({
         msgs[0].created_at
       );
 
-      setMsgs(current => merge(older, current));
+      setMsgs((current) => merge(older, current));
       setHasMore(older.length === PAGE);
     } catch (e) {
       setErr((e as Error).message);
     }
   }
 
-  // ─── SEND MESSAGE ──────────────────────────────────────
+  /* SEND MESSAGE */
 
   async function deliver(m: UIMsg) {
-    setMsgs(current =>
-      current.map(x =>
+    setMsgs((current) =>
+      current.map((x) =>
         x.id === m.id
           ? { ...x, status: 'sending' }
           : x
@@ -290,8 +294,8 @@ export function ConversationView({
         m.content
       );
 
-      setMsgs(current =>
-        current.map(x =>
+      setMsgs((current) =>
+        current.map((x) =>
           x.id === m.id
             ? { ...x, status: undefined }
             : x
@@ -303,8 +307,8 @@ export function ConversationView({
       const se = e as SendError;
 
       if (se.duplicate) {
-        setMsgs(current =>
-          current.map(x =>
+        setMsgs((current) =>
+          current.map((x) =>
             x.id === m.id
               ? { ...x, status: undefined }
               : x
@@ -316,18 +320,18 @@ export function ConversationView({
       }
 
       if (se.closed) {
-        setHead(current =>
+        setHead((current) =>
           current
             ? { ...current, is_open: false }
             : current
         );
 
-        setMsgs(current =>
-          current.filter(x => x.id !== m.id)
+        setMsgs((current) =>
+          current.filter((x) => x.id !== m.id)
         );
       } else {
-        setMsgs(current =>
-          current.map(x =>
+        setMsgs((current) =>
+          current.map((x) =>
             x.id === m.id
               ? { ...x, status: 'failed' }
               : x
@@ -339,7 +343,7 @@ export function ConversationView({
     }
   }
 
-  // ─── SUBMIT MESSAGE ────────────────────────────────────
+  /* SUBMIT MESSAGE */
 
   function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -356,15 +360,15 @@ export function ConversationView({
       sender_user_id: uid,
       content,
       created_at: new Date().toISOString(),
-      status: 'sending'
+      status: 'sending',
     };
 
-    setMsgs(current => merge(current, [m]));
+    setMsgs((current) => merge(current, [m]));
 
     void deliver(m);
   }
 
-  // ─── UNMATCH ───────────────────────────────────────────
+  /* UNMATCH */
 
   async function doUnmatch() {
     setBusy(true);
@@ -391,7 +395,7 @@ export function ConversationView({
     }
   }
 
-  // ─── LOADING ───────────────────────────────────────────
+  /* LOADING */
 
   if (loading) {
     return (
@@ -410,7 +414,7 @@ export function ConversationView({
     );
   }
 
-  // ─── ERROR ─────────────────────────────────────────────
+  /* ERROR */
 
   if (err && !head) {
     return (
@@ -431,7 +435,7 @@ export function ConversationView({
     );
   }
 
-  // ─── CLOSED CONVERSATION ───────────────────────────────
+  /* CLOSED CONVERSATION */
 
   if (!head || !head.is_open) {
     return (
@@ -456,7 +460,7 @@ export function ConversationView({
     );
   }
 
-  // ─── MAIN CHAT UI ──────────────────────────────────────
+  /* MAIN CHAT UI */
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -464,7 +468,6 @@ export function ConversationView({
       {/* CHAT HEADER */}
 
       <header className="flex shrink-0 items-center gap-3 border-b border-line p-3">
-
         <Link
           to="/inbox"
           aria-label="Back to messages"
@@ -505,7 +508,7 @@ export function ConversationView({
         <button
           aria-label="More options"
           aria-expanded={menu}
-          onClick={() => setMenu(current => !current)}
+          onClick={() => setMenu((current) => !current)}
           className="rounded-lg p-2 hover:bg-mist"
         >
           <MoreHorizontal className="h-5 w-5" />
@@ -629,22 +632,24 @@ export function ConversationView({
         <div ref={bottom} />
       </div>
 
-      {/* MESSAGE INPUT + ERROR
-          Mobile: full viewport width, directly above bottom navigation.
-          Desktop: normal in-flow composer. */}
+      {/* MESSAGE COMPOSER */}
 
       <div
         className="
-          fixed inset-x-0
+          fixed inset-x-6
           bottom-[calc(4.5rem+env(safe-area-inset-bottom))]
           z-30
-          border-t border-line
+          rounded-2xl
+          border border-line
           bg-white
           p-2
           shadow-[0_-4px_16px_rgba(15,23,42,0.06)]
           md:static md:z-auto
           md:shrink-0
-          md:border-t md:bg-white
+          md:rounded-none
+          md:border-x-0 md:border-b-0
+          md:border-t
+          md:bg-white
           md:p-3
           md:shadow-none
         "
@@ -680,8 +685,8 @@ export function ConversationView({
               maxLength={2000}
               placeholder="Write a message"
               value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => {
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   submit();
@@ -734,7 +739,6 @@ export function ConversationView({
           </button>
         </div>
       </Modal>
-
     </div>
   );
 }
