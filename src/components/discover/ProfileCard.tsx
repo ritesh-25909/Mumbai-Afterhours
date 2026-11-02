@@ -7,6 +7,7 @@ import {
   Heart,
   X,
   MapPin,
+  Navigation,
   GraduationCap,
   BriefcaseBusiness,
   Ruler,
@@ -36,11 +37,13 @@ export function ProfileCard({
   busy,
   onLike,
   onPass,
+  distanceKm,
 }: {
   c: Candidate;
   busy: boolean;
   onLike: () => void;
   onPass: () => void;
+  distanceKm?: number | null;
 }) {
   const candidate = c as ExtendedCandidate;
 
@@ -145,7 +148,7 @@ export function ProfileCard({
         className="relative select-none space-y-5"
         aria-label={`${candidate.display_name}, ${candidate.age}`}
       >
-        {/* MAIN PHOTO CARD WITH INTEGRATED PROMPT HEADER */}
+        {/* MAIN PHOTO CARD */}
         <section className="overflow-hidden rounded-[28px] border border-line/70 bg-white shadow-card">
           {photoPrompts[0]?.trim() && (
             <div className="border-b border-line/70 bg-white px-5 py-4">
@@ -181,6 +184,7 @@ export function ProfileCard({
               </span>
             )}
 
+            {/* PROFILE NAME AND LOCATION */}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-5 pt-28 text-white">
               <h2 className="flex items-center gap-2 text-3xl font-extrabold">
                 {candidate.display_name}, {candidate.age}
@@ -199,6 +203,21 @@ export function ProfileCard({
                   {candidate.neighbourhood}, Mumbai
                 </p>
               )}
+
+              {/* APPROXIMATE DISTANCE */}
+              {distanceKm !== null &&
+                distanceKm !== undefined &&
+                Number.isFinite(distanceKm) && (
+                  <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-white">
+                    <Navigation className="h-3.5 w-3.5" />
+
+                    Approx.{' '}
+                    {distanceKm < 10
+                      ? distanceKm.toFixed(1)
+                      : Math.round(distanceKm)}{' '}
+                    km away
+                  </p>
+                )}
             </div>
           </div>
         </section>
@@ -325,52 +344,72 @@ export function ProfileCard({
           </section>
         )}
 
-        {/* MANUALLY ANSWERED PROFILE PROMPTS */}
-        {profilePrompts.map((item, index) => (
-          <section
-            key={`${candidate.id}-profile-prompt-${index}`}
-            className="rounded-[24px] border border-line/70 bg-white px-5 py-5 shadow-card"
-          >
-            <p className="text-base font-bold leading-relaxed text-ink">
-              {item.prompt}
-            </p>
-
-            <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-7 text-slate2">
-              {item.answer}
-            </p>
-          </section>
-        ))}
-
-        {/* ADDITIONAL PHOTO CARDS WITH INTEGRATED PROMPT HEADERS */}
+        {/* ADDITIONAL PHOTO CARDS */}
         {photos.slice(1).map((url, index) => {
           const photoIndex = index + 1;
           const prompt = photoPrompts[photoIndex];
 
           return (
-            <section
+            <div
               key={`${candidate.id}-photo-${photoIndex}`}
-              className="overflow-hidden rounded-[28px] border border-line/70 bg-white shadow-card"
+              className="space-y-5"
             >
-              {prompt?.trim() && (
-                <div className="border-b border-line/70 bg-white px-5 py-4">
-                  <p className="text-left text-base font-bold leading-relaxed text-ink">
-                    {prompt}
-                  </p>
-                </div>
-              )}
+              <section className="overflow-hidden rounded-[28px] border border-line/70 bg-white shadow-card">
+                {prompt?.trim() && (
+                  <div className="border-b border-line/70 bg-white px-5 py-4">
+                    <p className="text-left text-base font-bold leading-relaxed text-ink">
+                      {prompt}
+                    </p>
+                  </div>
+                )}
 
-              <div className="overflow-hidden bg-mist">
-                <img
-                  src={url}
-                  alt={`${candidate.display_name}, photo ${photoIndex + 1}`}
-                  loading="lazy"
-                  draggable={false}
-                  className="w-full object-cover"
-                />
-              </div>
-            </section>
+                <div className="overflow-hidden bg-mist">
+                  <img
+                    src={url}
+                    alt={`${candidate.display_name}, photo ${photoIndex + 1}`}
+                    loading="lazy"
+                    draggable={false}
+                    className="w-full object-cover"
+                  />
+                </div>
+              </section>
+
+              {/* PROFILE PROMPTS AFTER SECOND PHOTO */}
+              {photoIndex === 1 &&
+                profilePrompts.map((item, promptIndex) => (
+                  <section
+                    key={`${candidate.id}-profile-prompt-${promptIndex}`}
+                    className="rounded-[24px] border border-line/70 bg-white px-5 py-5 shadow-card"
+                  >
+                    <p className="text-base font-bold leading-relaxed text-ink">
+                      {item.prompt}
+                    </p>
+
+                    <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-7 text-slate2">
+                      {item.answer}
+                    </p>
+                  </section>
+                ))}
+            </div>
           );
         })}
+
+        {/* FALLBACK: PROFILE PROMPTS WITHOUT SECOND PHOTO */}
+        {photos.length < 2 &&
+          profilePrompts.map((item, index) => (
+            <section
+              key={`${candidate.id}-profile-prompt-${index}`}
+              className="rounded-[24px] border border-line/70 bg-white px-5 py-5 shadow-card"
+            >
+              <p className="text-base font-bold leading-relaxed text-ink">
+                {item.prompt}
+              </p>
+
+              <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-7 text-slate2">
+                {item.answer}
+              </p>
+            </section>
+          ))}
       </article>
 
       {/* LIKE / PASS ACTIONS */}
