@@ -5,9 +5,6 @@ import { supabase } from '../../lib/supabase';
 // PHOTO CACHE
 // ==========================================
 
-// Signed URLs are valid for 60 minutes.
-// Cache them for 55 minutes to avoid expiry issues.
-
 const PHOTO_CACHE_DURATION = 55 * 60 * 1000;
 
 const photoUrlCache = new Map<
@@ -18,7 +15,6 @@ const photoUrlCache = new Map<
   }
 >();
 
-// Prevent multiple simultaneous requests for the same photo.
 const pendingPhotoRequests = new Map<
   string,
   Promise<string | null>
@@ -38,7 +34,21 @@ export type Candidate = {
   languages: string[];
   relationship_intention: string | null;
   verified: boolean;
+
+  // Education
+  college: string | null;
+  education_status: string | null;
+
+  // Additional profile details
+  height: string | null;
+  occupation: string | null;
+  smoking: string | null;
+  alcohol: string | null;
+  religion: string | null;
+
+  // Photos and associated prompts
   photo_paths: string[];
+  photo_prompts: (string | null)[];
   photoUrls: string[];
 };
 
@@ -86,7 +96,7 @@ export async function signPhotoPaths(
   const missingPaths: string[] = [];
   const now = Date.now();
 
-  // STEP 1: Use cached URLs wherever possible.
+  // STEP 1: Cached URLs
 
   for (const path of uniquePaths) {
     const cached = photoUrlCache.get(path);
@@ -103,7 +113,7 @@ export async function signPhotoPaths(
     return result;
   }
 
-  // STEP 2: Only request photos that are not already being loaded.
+  // STEP 2: Fetch missing URLs
 
   const pathsToFetch = missingPaths.filter(
     path => !pendingPhotoRequests.has(path)
@@ -137,8 +147,6 @@ export async function signPhotoPaths(
       return urls;
     })();
 
-    // Register this batch so other components can reuse it.
-
     pathsToFetch.forEach(path => {
       const pending = batchRequest!.then(
         urls => urls[path] ?? null
@@ -156,7 +164,7 @@ export async function signPhotoPaths(
     }
   }
 
-  // STEP 3: Resolve any requests started by another component.
+  // STEP 3: Resolve pending requests
 
   const pendingResults = await Promise.all(
     missingPaths.map(async path => {
@@ -190,7 +198,6 @@ export async function signPhotoPaths(
 // ==========================================
 
 export async function fetchCandidates(): Promise<Candidate[]> {
-  // Always offset 0: acted-on profiles drop out of results.
   const { data, error } = await supabase.rpc(
     'discover_profiles',
     {
@@ -208,15 +215,37 @@ export async function fetchCandidates(): Promise<Candidate[]> {
   const rows = (data ?? []) as Omit<Candidate, 'photoUrls'>[];
 
   const urls = await signPhotoPaths(
-    rows.flatMap(r => r.photo_paths ?? [])
+    rows.flatMap(row => row.photo_paths ?? [])
   );
 
-  return rows.map(r => ({
-    ...r,
-    photoUrls: (r.photo_paths ?? [])
-      .map(path => urls[path])
-      .filter((url): url is string => Boolean(url))
-  }));
+  return rows.map(row => {
+    const paths = row.photo_paths ?? [];
+    const prompts = row.photo_prompts ?? [];
+
+    // Keep every prompt attached to its correct image.
+    const availablePhotos = paths
+      .map((path, index) => ({
+        path,
+        prompt: prompts[index] ?? null,
+        url: urls[path]
+      }))
+      .filter(
+        (photo): photo is {
+          path: string;
+          prompt: string | null;
+          url: string;
+        } => Boolean(photo.url)
+      );
+
+    return {
+      ...row,
+      photo_paths: availablePhotos.map(photo => photo.path),
+      photo_prompts: availablePhotos.map(photo => photo.prompt),
+      photoUrls: availablePhotos.map(photo => photo.url),
+      interests: row.interests ?? [],
+      languages: row.languages ?? []
+    };
+  });
 }
 
 // ==========================================
@@ -328,7 +357,6 @@ export async function fetchMatchedProfile(
     throw new Error('Invalid profile.');
   }
 
-  // Secure RPC verifies the active mutual match.
   const { data, error } = await supabase.rpc(
     'get_matched_profile',
     {
@@ -346,7 +374,6 @@ export async function fetchMatchedProfile(
     photos?: Omit<MatchedProfilePhoto, 'photoUrl'>[];
   };
 
-  // Reuse cached signed URLs whenever possible.
   const photos = row.photos ?? [];
 
   const urls = await signPhotoPaths(
