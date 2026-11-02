@@ -99,20 +99,19 @@ export function ConversationView({
   const bottom = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
-  // Prevent older requests from updating a newer conversation.
   const loadVersion = useRef(0);
 
   // ─── READ RECEIPTS ─────────────────────────────────────
 
   const read = useCallback(() => {
-  if (document.visibilityState !== 'visible') return;
+    if (document.visibilityState !== 'visible') return;
 
-  void Promise.resolve(markRead(id))
-    .then(() => onRead())
-    .catch(() => {
-      // Read receipts should not block the chat.
-    });
-}, [id, onRead]);
+    void Promise.resolve(markRead(id))
+      .then(() => onRead())
+      .catch(() => {
+        // Read receipts should not block the chat.
+      });
+  }, [id, onRead]);
 
   // ─── FAST CONVERSATION LOADING ─────────────────────────
 
@@ -129,8 +128,6 @@ export function ConversationView({
 
     stick.current = true;
 
-    // Start both requests immediately.
-    // Neither waits for the other to finish.
     const headerTask = getConversation(id)
       .then(h => {
         if (version !== loadVersion.current) return;
@@ -142,7 +139,6 @@ export function ConversationView({
           read();
         }
 
-        // Load the profile image independently.
         if (h?.photo_path) {
           void signPhotoPaths([h.photo_path])
             .then(urls => {
@@ -231,7 +227,6 @@ export function ConversationView({
 
   // ─── FALLBACK POLLING ──────────────────────────────────
 
-  // Only poll if realtime is unavailable.
   useEffect(() => {
     if (live || !head?.is_open) return;
 
@@ -364,7 +359,6 @@ export function ConversationView({
       status: 'sending'
     };
 
-    // Show message immediately before network response.
     setMsgs(current => merge(current, [m]));
 
     void deliver(m);
@@ -465,10 +459,11 @@ export function ConversationView({
   // ─── MAIN CHAT UI ──────────────────────────────────────
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
 
       {/* CHAT HEADER */}
-      <header className="flex items-center gap-3 border-b border-line p-3">
+
+      <header className="flex shrink-0 items-center gap-3 border-b border-line p-3">
 
         <Link
           to="/inbox"
@@ -518,8 +513,9 @@ export function ConversationView({
       </header>
 
       {/* CHAT MENU */}
+
       {menu && (
-        <div className="space-y-3 border-b border-line bg-mist p-3">
+        <div className="shrink-0 space-y-3 border-b border-line bg-mist p-3">
           <ReportBlock
             uid={uid}
             targetId={head.user_id!}
@@ -539,8 +535,15 @@ export function ConversationView({
       )}
 
       {/* MESSAGES */}
+
       <div
-        className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3"
+        className="
+          min-h-0 flex-1
+          space-y-1 overflow-y-auto
+          p-3
+          pb-28
+          md:pb-3
+        "
         aria-live="polite"
       >
         {hasMore && (
@@ -626,53 +629,85 @@ export function ConversationView({
         <div ref={bottom} />
       </div>
 
-      {/* ERROR MESSAGES */}
-      {(sendErr || err) && (
-        <p
-          role="alert"
-          className="px-3 pb-1 text-sm text-bad"
-        >
-          {sendErr ?? err}
-        </p>
-      )}
+      {/* MESSAGE INPUT + ERROR
+          Mobile: full viewport width, directly above bottom navigation.
+          Desktop: normal in-flow composer. */}
 
-      {/* MESSAGE INPUT */}
-      <form
-        onSubmit={submit}
-        className="flex items-end gap-2 border-t border-line p-3"
+      <div
+        className="
+          fixed inset-x-0
+          bottom-[calc(4.5rem+env(safe-area-inset-bottom))]
+          z-30
+          border-t border-line
+          bg-white
+          p-2
+          shadow-[0_-4px_16px_rgba(15,23,42,0.06)]
+          md:static md:z-auto
+          md:shrink-0
+          md:border-t md:bg-white
+          md:p-3
+          md:shadow-none
+        "
       >
-        <label className="min-w-0 flex-1">
-          <span className="sr-only">
-            Message
-          </span>
+        {(sendErr || err) && (
+          <p
+            role="alert"
+            className="mb-1 px-2 text-sm text-bad"
+          >
+            {sendErr ?? err}
+          </p>
+        )}
 
-          <textarea
-            className="field max-h-32 resize-none py-2.5"
-            rows={1}
-            maxLength={2000}
-            placeholder="Write a message"
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-          />
-        </label>
-
-        <button
-          type="submit"
-          className="btn-primary h-11 px-4"
-          disabled={!text.trim()}
-          aria-label="Send message"
+        <form
+          onSubmit={submit}
+          className="flex w-full items-end gap-2"
         >
-          <Send className="h-5 w-5" />
-        </button>
-      </form>
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">
+              Message
+            </span>
+
+            <textarea
+              className="
+                field
+                min-h-[54px]
+                max-h-32
+                w-full
+                resize-none
+                py-3
+              "
+              rows={1}
+              maxLength={2000}
+              placeholder="Write a message"
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+            />
+          </label>
+
+          <button
+            type="submit"
+            className="
+              btn-primary
+              grid h-[54px] w-[58px]
+              shrink-0 place-items-center
+              px-3
+            "
+            disabled={!text.trim()}
+            aria-label="Send message"
+          >
+            <Send className="h-6 w-6" />
+          </button>
+        </form>
+      </div>
 
       {/* UNMATCH MODAL */}
+
       <Modal
         open={unmatchOpen}
         onClose={() => setUnmatchOpen(false)}
