@@ -2,27 +2,13 @@
 import { supabase } from '../../lib/supabase';
 
 // ==========================================
-// PHOTO CACHE
-// ==========================================
-
-const PHOTO_CACHE_DURATION = 55 * 60 * 1000;
-
-const photoUrlCache = new Map<
-  string,
-  {
-    url: string;
-    expiresAt: number;
-  }
->();
-
-const pendingPhotoRequests = new Map<
-  string,
-  Promise<string | null>
->();
-
-// ==========================================
 // TYPES
 // ==========================================
+
+export type ProfilePromptAnswer = {
+  prompt: string;
+  answer: string;
+};
 
 export type Candidate = {
   id: string;
@@ -35,21 +21,20 @@ export type Candidate = {
   relationship_intention: string | null;
   verified: boolean;
 
-  // Education
   college: string | null;
   education_status: string | null;
 
-  // Additional profile details
   height: string | null;
   occupation: string | null;
   smoking: string | null;
   alcohol: string | null;
   religion: string | null;
 
-  // Photos and associated prompts
   photo_paths: string[];
   photo_prompts: (string | null)[];
   photoUrls: string[];
+
+  profile_prompts: ProfilePromptAnswer[];
 };
 
 export type MatchedProfilePhoto = {
@@ -80,7 +65,58 @@ export type MatchedProfile = {
 };
 
 // ==========================================
-// SIGN PROFILE PHOTOS - OPTIMIZED
+// PHOTO CACHE
+// ==========================================
+
+const PHOTO_CACHE_DURATION = 55 * 60 * 1000;
+
+const photoUrlCache = new Map<
+  string,
+  {
+    url: string;
+    expiresAt: number;
+  }
+>();
+
+const pendingPhotoRequests = new Map<
+  string,
+  Promise<string | null>
+>();
+
+// ==========================================
+// PROFILE PROMPT NORMALIZER
+// ==========================================
+
+function normalizeProfilePrompts(
+  value: unknown
+): ProfilePromptAnswer[] {
+  let parsed = value;
+
+  if (typeof parsed === 'string') {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  return parsed.filter(
+    (item): item is ProfilePromptAnswer =>
+      item !== null &&
+      typeof item === 'object' &&
+      typeof item.prompt === 'string' &&
+      typeof item.answer === 'string' &&
+      item.prompt.trim().length > 0 &&
+      item.answer.trim().length > 0
+  );
+}
+
+// ==========================================
+// SIGN PROFILE PHOTOS
 // ==========================================
 
 export async function signPhotoPaths(
@@ -96,8 +132,6 @@ export async function signPhotoPaths(
   const missingPaths: string[] = [];
   const now = Date.now();
 
-  // STEP 1: Cached URLs
-
   for (const path of uniquePaths) {
     const cached = photoUrlCache.get(path);
 
@@ -112,8 +146,6 @@ export async function signPhotoPaths(
   if (!missingPaths.length) {
     return result;
   }
-
-  // STEP 2: Fetch missing URLs
 
   const pathsToFetch = missingPaths.filter(
     path => !pendingPhotoRequests.has(path)
@@ -139,7 +171,7 @@ export async function signPhotoPaths(
 
           photoUrlCache.set(item.path, {
             url: item.signedUrl,
-            expiresAt: Date.now() + PHOTO_CACHE_DURATION
+            expiresAt: Date.now() + PHOTO_CACHE_DURATION,
           });
         }
       });
@@ -163,8 +195,6 @@ export async function signPhotoPaths(
       });
     }
   }
-
-  // STEP 3: Resolve pending requests
 
   const pendingResults = await Promise.all(
     missingPaths.map(async path => {
@@ -197,22 +227,31 @@ export async function signPhotoPaths(
 // DISCOVER PROFILES
 // ==========================================
 
+type CandidateRow = Omit<
+  Candidate,
+  'photoUrls' | 'profile_prompts'
+> & {
+  profile_prompts: unknown;
+};
+
 export async function fetchCandidates(): Promise<Candidate[]> {
   const { data, error } = await supabase.rpc(
     'discover_profiles',
     {
       page_size: 10,
-      page_offset: 0
+      page_offset: 0,
     }
   );
 
   if (error) {
+    console.error('discover_profiles error:', error);
+
     throw new Error(
       'Could not load profiles. Check your connection and try again.'
     );
   }
 
-  const rows = (data ?? []) as Omit<Candidate, 'photoUrls'>[];
+  const rows = (data ?? []) as CandidateRow[];
 
   const urls = await signPhotoPaths(
     rows.flatMap(row => row.photo_paths ?? [])
@@ -222,15 +261,17 @@ export async function fetchCandidates(): Promise<Candidate[]> {
     const paths = row.photo_paths ?? [];
     const prompts = row.photo_prompts ?? [];
 
-    // Keep every prompt attached to its correct image.
+    // Keep the photo, its prompt and signed URL associated.
     const availablePhotos = paths
       .map((path, index) => ({
         path,
         prompt: prompts[index] ?? null,
-        url: urls[path]
+        url: urls[path],
       }))
       .filter(
-        (photo): photo is {
+        (
+          photo
+        ): photo is {
           path: string;
           prompt: string | null;
           url: string;
@@ -239,11 +280,17 @@ export async function fetchCandidates(): Promise<Candidate[]> {
 
     return {
       ...row,
+
       photo_paths: availablePhotos.map(photo => photo.path),
       photo_prompts: availablePhotos.map(photo => photo.prompt),
       photoUrls: availablePhotos.map(photo => photo.url),
+
+      profile_prompts: normalizeProfilePrompts(
+        row.profile_prompts
+      ),
+
       interests: row.interests ?? [],
-      languages: row.languages ?? []
+      languages: row.languages ?? [],
     };
   });
 }
@@ -317,7 +364,7 @@ export const REPORT_CATEGORIES: Record<string, string> = {
   inappropriate_content: 'Inappropriate content',
   spam_scam: 'Spam or scam',
   suspected_underage: 'Suspected underage user',
-  other: 'Other safety concern'
+  other: 'Other safety concern',
 };
 
 // ==========================================
@@ -336,7 +383,7 @@ export async function reportUser(
       reporter_user_id: reporter,
       reported_user_id: reported,
       category,
-      description: description || null
+      description: description || null,
     });
 
   if (error) {
@@ -360,7 +407,7 @@ export async function fetchMatchedProfile(
   const { data, error } = await supabase.rpc(
     'get_matched_profile',
     {
-      target_user_id: userId
+      target_user_id: userId,
     }
   );
 
@@ -386,7 +433,7 @@ export async function fetchMatchedProfile(
       .filter(photo => Boolean(urls[photo.storage_path]))
       .map(photo => ({
         ...photo,
-        photoUrl: urls[photo.storage_path]
-      }))
+        photoUrl: urls[photo.storage_path],
+      })),
   };
 }

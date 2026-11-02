@@ -13,10 +13,19 @@ import {
   Cigarette,
   Wine,
   Languages,
-  Sparkles
+  Sparkles,
 } from 'lucide-react';
 
 import type { Candidate } from '../../features/discovery/api';
+
+type ProfilePromptAnswer = {
+  prompt: string;
+  answer: string;
+};
+
+type ExtendedCandidate = Candidate & {
+  profile_prompts?: ProfilePromptAnswer[] | null;
+};
 
 const reduced = () =>
   typeof matchMedia !== 'undefined' &&
@@ -26,19 +35,30 @@ export function ProfileCard({
   c,
   busy,
   onLike,
-  onPass
+  onPass,
 }: {
   c: Candidate;
   busy: boolean;
   onLike: () => void;
   onPass: () => void;
 }) {
+  const candidate = c as ExtendedCandidate;
+
   const [dx, setDx] = useState(0);
   const start = useRef<number | null>(null);
   const captured = useRef(false);
 
-  const photos = c.photoUrls ?? [];
-  const prompts = c.photo_prompts ?? [];
+  const photos = candidate.photoUrls ?? [];
+  const photoPrompts = candidate.photo_prompts ?? [];
+
+  const profilePrompts = (candidate.profile_prompts ?? []).filter(
+    item =>
+      item &&
+      typeof item.prompt === 'string' &&
+      typeof item.answer === 'string' &&
+      item.prompt.trim() &&
+      item.answer.trim()
+  );
 
   function down(e: PointerEvent<HTMLElement>) {
     if ((e.target as HTMLElement).closest('button')) return;
@@ -76,7 +96,7 @@ export function ProfileCard({
   function Detail({
     icon: Icon,
     label,
-    value
+    value,
   }: {
     icon: ElementType;
     label: string;
@@ -98,13 +118,12 @@ export function ProfileCard({
     );
   }
 
-  // Show each prompt without a section heading.
   function PhotoPrompt({ prompt }: { prompt: string | null }) {
     if (!prompt?.trim()) return null;
 
     return (
-      <div className="rounded-[24px] border border-line/70 bg-white px-5 py-6 shadow-card">
-        <p className="whitespace-pre-line text-xl font-semibold leading-relaxed text-ink">
+      <div className="rounded-2xl border border-line/70 bg-white px-4 py-3 shadow-card">
+        <p className="text-sm font-semibold leading-relaxed text-ink">
           {prompt}
         </p>
       </div>
@@ -114,19 +133,18 @@ export function ProfileCard({
   const lifestyle = [
     {
       label: 'Smoking',
-      value: c.smoking,
-      icon: Cigarette
+      value: candidate.smoking,
+      icon: Cigarette,
     },
     {
       label: 'Drinking',
-      value: c.alcohol,
-      icon: Wine
-    }
+      value: candidate.alcohol,
+      icon: Wine,
+    },
   ].filter(item => item.value?.trim());
 
   return (
     <div className="mx-auto w-full max-w-md">
-
       <article
         onPointerDown={down}
         onPointerMove={move}
@@ -134,20 +152,20 @@ export function ProfileCard({
         onPointerCancel={up}
         style={{
           transform: `translateX(${dx}px) rotate(${reduced() ? 0 : dx / 25}deg)`,
-          touchAction: 'pan-y'
+          touchAction: 'pan-y',
         }}
         className="relative select-none space-y-5"
-        aria-label={`${c.display_name}, ${c.age}`}
+        aria-label={`${candidate.display_name}, ${candidate.age}`}
       >
+        {/* MAIN PHOTO PROMPT */}
+        <PhotoPrompt prompt={photoPrompts[0] ?? null} />
 
-        {/* 1. MAIN PROFILE IMAGE */}
-
+        {/* MAIN PROFILE PHOTO */}
         <section className="relative overflow-hidden rounded-[28px] bg-mist shadow-card">
-
           {photos[0] ? (
             <img
               src={photos[0]}
-              alt={`${c.display_name}, main profile photo`}
+              alt={`${candidate.display_name}, main profile photo`}
               draggable={false}
               className="aspect-[4/5] w-full object-cover"
             />
@@ -170,11 +188,10 @@ export function ProfileCard({
           )}
 
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-5 pt-28 text-white">
-
             <h2 className="flex items-center gap-2 text-3xl font-extrabold">
-              {c.display_name}, {c.age}
+              {candidate.display_name}, {candidate.age}
 
-              {c.verified && (
+              {candidate.verified && (
                 <BadgeCheck
                   className="h-6 w-6 shrink-0 text-sky-300"
                   aria-label="Verified"
@@ -182,59 +199,52 @@ export function ProfileCard({
               )}
             </h2>
 
-            {c.neighbourhood && (
+            {candidate.neighbourhood && (
               <p className="mt-2 flex items-center gap-1.5 text-sm text-white/85">
                 <MapPin className="h-4 w-4" />
-                {c.neighbourhood}, Mumbai
+                {candidate.neighbourhood}, Mumbai
               </p>
             )}
           </div>
         </section>
 
-        {/* 2. PROFILE DETAILS */}
-
+        {/* PROFILE DETAILS */}
         <section className="space-y-3">
-
           <div className="grid grid-cols-2 gap-2">
-
             <Detail
               icon={GraduationCap}
               label="University / College"
-              value={c.college}
+              value={candidate.college}
             />
 
             <Detail
               icon={GraduationCap}
               label="Education"
-              value={c.education_status}
+              value={candidate.education_status}
             />
 
             <Detail
               icon={BriefcaseBusiness}
               label="Occupation"
-              value={c.occupation}
+              value={candidate.occupation}
             />
 
             <Detail
               icon={Ruler}
               label="Height"
-              value={c.height}
+              value={candidate.height}
             />
-
           </div>
         </section>
 
-        {/* 3. LIFESTYLE DETAILS */}
-
-        {(lifestyle.length > 0 || c.religion) && (
+        {/* LIFESTYLE */}
+        {(lifestyle.length > 0 || candidate.religion) && (
           <section className="space-y-3">
-
             <h3 className="text-lg font-bold text-ink">
               Lifestyle
             </h3>
 
             <div className="grid grid-cols-2 gap-2">
-
               {lifestyle.map(item => {
                 const Icon = item.icon;
 
@@ -251,41 +261,34 @@ export function ProfileCard({
               <Detail
                 icon={Sparkles}
                 label="Religion"
-                value={c.religion}
+                value={candidate.religion}
               />
-
             </div>
           </section>
         )}
 
-        {/* 4. ABOUT */}
-
-        {c.bio && (
+        {/* ABOUT */}
+        {candidate.bio && (
           <section className="space-y-2">
-
             <h3 className="text-lg font-bold text-ink">
               About
             </h3>
 
             <p className="whitespace-pre-line text-[15px] leading-7 text-ink/80">
-              {c.bio}
+              {candidate.bio}
             </p>
-
           </section>
         )}
 
-        {/* 5. INTERESTS */}
-
-        {c.interests.length > 0 && (
+        {/* INTERESTS */}
+        {candidate.interests.length > 0 && (
           <section className="space-y-3">
-
             <h3 className="text-lg font-bold text-ink">
               Interests
             </h3>
 
             <div className="flex flex-wrap gap-2">
-
-              {c.interests.map(item => (
+              {candidate.interests.map(item => (
                 <span
                   key={item}
                   className="rounded-full border border-line bg-white px-4 py-2 text-sm font-medium"
@@ -293,32 +296,26 @@ export function ProfileCard({
                   {item}
                 </span>
               ))}
-
             </div>
           </section>
         )}
 
-        {/* 6. RELATIONSHIP INTENTION */}
-
-        {c.relationship_intention && (
+        {/* RELATIONSHIP INTENTION */}
+        {candidate.relationship_intention && (
           <section className="rounded-[22px] bg-royal/5 p-4">
-
             <p className="text-xs font-bold uppercase tracking-wider text-royal">
               Looking for
             </p>
 
             <p className="mt-2 font-semibold text-ink">
-              {c.relationship_intention}
+              {candidate.relationship_intention}
             </p>
-
           </section>
         )}
 
-        {/* 7. LANGUAGES */}
-
-        {c.languages.length > 0 && (
+        {/* LANGUAGES */}
+        {candidate.languages.length > 0 && (
           <section className="flex items-start gap-3 rounded-2xl bg-white p-4">
-
             <Languages className="mt-1 h-5 w-5 shrink-0 text-royal" />
 
             <div>
@@ -327,67 +324,61 @@ export function ProfileCard({
               </p>
 
               <p className="mt-1 text-sm text-slate2">
-                {c.languages.join(', ')}
+                {candidate.languages.join(', ')}
               </p>
             </div>
-
           </section>
         )}
 
-        {/* 8. FIRST PHOTO'S PROMPT */}
+        {/* MANUALLY ANSWERED PROFILE PROMPTS */}
+        {profilePrompts.map((item, index) => (
+          <section
+            key={`${candidate.id}-profile-prompt-${index}`}
+            className="rounded-[24px] border border-line/70 bg-white px-5 py-5 shadow-card"
+          >
+            <p className="text-base font-bold leading-relaxed text-ink">
+              {item.prompt}
+            </p>
 
-        <PhotoPrompt prompt={prompts[0] ?? null} />
+            <p className="mt-2 whitespace-pre-line break-words text-[15px] leading-7 text-slate2">
+              {item.answer}
+            </p>
+          </section>
+        ))}
 
-        {/* 9. ALTERNATING PHOTOS AND PROMPTS */}
-
+        {/* ADDITIONAL PHOTOS WITH PROMPTS ABOVE EACH IMAGE */}
         {photos.slice(1).map((url, index) => {
-
           const photoIndex = index + 1;
-          const isLastPhoto = photoIndex === photos.length - 1;
 
           return (
             <section
-              key={`${c.id}-photo-${photoIndex}`}
-              className="space-y-5"
+              key={`${candidate.id}-photo-${photoIndex}`}
+              className="space-y-3"
             >
-
-              {/* PROFILE IMAGE */}
+              <PhotoPrompt
+                prompt={photoPrompts[photoIndex] ?? null}
+              />
 
               <div className="overflow-hidden rounded-[26px] bg-mist shadow-card">
-
                 <img
                   src={url}
-                  alt={`${c.display_name}, photo ${photoIndex + 1}`}
+                  alt={`${candidate.display_name}, photo ${photoIndex + 1}`}
                   loading="lazy"
                   draggable={false}
                   className="w-full object-cover"
                 />
-
               </div>
-
-              {/* PROMPT BETWEEN PHOTOS */}
-              {/* Last photo remains the final element. */}
-
-              {!isLastPhoto && (
-                <PhotoPrompt
-                  prompt={prompts[photoIndex] ?? null}
-                />
-              )}
-
             </section>
           );
         })}
-
       </article>
 
-      {/* 10. LIKE / PASS ACTIONS */}
-
+      {/* LIKE / PASS ACTIONS */}
       <div className="sticky bottom-3 z-20 mt-5 flex justify-center gap-7 rounded-full bg-white/90 py-3 backdrop-blur-md">
-
         <button
           onClick={onPass}
           disabled={busy}
-          aria-label={`Pass on ${c.display_name}`}
+          aria-label={`Pass on ${candidate.display_name}`}
           className="grid h-16 w-16 place-items-center rounded-full border border-line bg-white text-bad shadow-card disabled:opacity-50"
         >
           <X className="h-8 w-8" />
@@ -396,14 +387,12 @@ export function ProfileCard({
         <button
           onClick={onLike}
           disabled={busy}
-          aria-label={`Like ${c.display_name}`}
+          aria-label={`Like ${candidate.display_name}`}
           className="grid h-16 w-16 place-items-center rounded-full bg-royal text-white shadow-card disabled:opacity-50"
         >
           <Heart className="h-8 w-8" />
         </button>
-
       </div>
-
     </div>
   );
 }
