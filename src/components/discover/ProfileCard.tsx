@@ -118,18 +118,6 @@ export function ProfileCard({
     );
   }
 
-  function PhotoPrompt({ prompt }: { prompt: string | null }) {
-    if (!prompt?.trim()) return null;
-
-    return (
-      <div className="rounded-2xl border border-line/70 bg-white px-4 py-3 shadow-card">
-        <p className="text-sm font-semibold leading-relaxed text-ink">
-          {prompt}
-        </p>
-      </div>
-    );
-  }
-
   const lifestyle = [
     {
       label: 'Smoking',
@@ -157,54 +145,61 @@ export function ProfileCard({
         className="relative select-none space-y-5"
         aria-label={`${candidate.display_name}, ${candidate.age}`}
       >
-        {/* MAIN PHOTO PROMPT */}
-        <PhotoPrompt prompt={photoPrompts[0] ?? null} />
-
-        {/* MAIN PROFILE PHOTO */}
-        <section className="relative overflow-hidden rounded-[28px] bg-mist shadow-card">
-          {photos[0] ? (
-            <img
-              src={photos[0]}
-              alt={`${candidate.display_name}, main profile photo`}
-              draggable={false}
-              className="aspect-[4/5] w-full object-cover"
-            />
-          ) : (
-            <div className="flex aspect-[4/5] items-center justify-center text-slate2">
-              No profile photo available
+        {/* MAIN PHOTO CARD WITH INTEGRATED PROMPT HEADER */}
+        <section className="overflow-hidden rounded-[28px] border border-line/70 bg-white shadow-card">
+          {photoPrompts[0]?.trim() && (
+            <div className="border-b border-line/70 bg-white px-5 py-4">
+              <p className="text-left text-base font-bold leading-relaxed text-ink">
+                {photoPrompts[0]}
+              </p>
             </div>
           )}
 
-          {dx > 40 && (
-            <span className="absolute left-5 top-10 rounded-lg border-2 border-ok px-4 py-2 text-xl font-extrabold text-ok">
-              LIKE
-            </span>
-          )}
-
-          {dx < -40 && (
-            <span className="absolute right-5 top-10 rounded-lg border-2 border-bad px-4 py-2 text-xl font-extrabold text-bad">
-              PASS
-            </span>
-          )}
-
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-5 pt-28 text-white">
-            <h2 className="flex items-center gap-2 text-3xl font-extrabold">
-              {candidate.display_name}, {candidate.age}
-
-              {candidate.verified && (
-                <BadgeCheck
-                  className="h-6 w-6 shrink-0 text-sky-300"
-                  aria-label="Verified"
-                />
-              )}
-            </h2>
-
-            {candidate.neighbourhood && (
-              <p className="mt-2 flex items-center gap-1.5 text-sm text-white/85">
-                <MapPin className="h-4 w-4" />
-                {candidate.neighbourhood}, Mumbai
-              </p>
+          <div className="relative overflow-hidden bg-mist">
+            {photos[0] ? (
+              <img
+                src={photos[0]}
+                alt={`${candidate.display_name}, main profile photo`}
+                draggable={false}
+                className="aspect-[4/5] w-full object-cover"
+              />
+            ) : (
+              <div className="flex aspect-[4/5] items-center justify-center text-slate2">
+                No profile photo available
+              </div>
             )}
+
+            {dx > 40 && (
+              <span className="absolute left-5 top-10 rounded-lg border-2 border-ok px-4 py-2 text-xl font-extrabold text-ok">
+                LIKE
+              </span>
+            )}
+
+            {dx < -40 && (
+              <span className="absolute right-5 top-10 rounded-lg border-2 border-bad px-4 py-2 text-xl font-extrabold text-bad">
+                PASS
+              </span>
+            )}
+
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-5 pt-28 text-white">
+              <h2 className="flex items-center gap-2 text-3xl font-extrabold">
+                {candidate.display_name}, {candidate.age}
+
+                {candidate.verified && (
+                  <BadgeCheck
+                    className="h-6 w-6 shrink-0 text-sky-300"
+                    aria-label="Verified"
+                  />
+                )}
+              </h2>
+
+              {candidate.neighbourhood && (
+                <p className="mt-2 flex items-center gap-1.5 text-sm text-white/85">
+                  <MapPin className="h-4 w-4" />
+                  {candidate.neighbourhood}, Mumbai
+                </p>
+              )}
+            </div>
           </div>
         </section>
 
@@ -346,20 +341,25 @@ export function ProfileCard({
           </section>
         ))}
 
-        {/* ADDITIONAL PHOTOS WITH PROMPTS ABOVE EACH IMAGE */}
+        {/* ADDITIONAL PHOTO CARDS WITH INTEGRATED PROMPT HEADERS */}
         {photos.slice(1).map((url, index) => {
           const photoIndex = index + 1;
+          const prompt = photoPrompts[photoIndex];
 
           return (
             <section
               key={`${candidate.id}-photo-${photoIndex}`}
-              className="space-y-3"
+              className="overflow-hidden rounded-[28px] border border-line/70 bg-white shadow-card"
             >
-              <PhotoPrompt
-                prompt={photoPrompts[photoIndex] ?? null}
-              />
+              {prompt?.trim() && (
+                <div className="border-b border-line/70 bg-white px-5 py-4">
+                  <p className="text-left text-base font-bold leading-relaxed text-ink">
+                    {prompt}
+                  </p>
+                </div>
+              )}
 
-              <div className="overflow-hidden rounded-[26px] bg-mist shadow-card">
+              <div className="overflow-hidden bg-mist">
                 <img
                   src={url}
                   alt={`${candidate.display_name}, photo ${photoIndex + 1}`}
