@@ -1,9 +1,10 @@
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BadgeCheck } from 'lucide-react';
+import { BadgeCheck, CheckCircle2, Cloud, AlertCircle } from 'lucide-react';
 
 import { useMyProfile } from '../features/profiles/useMyProfile';
+
 import {
   updateProfile,
   type ProfilePromptAnswer,
@@ -78,25 +79,60 @@ export default function ProfileSettingsPage() {
     reload,
   } = useMyProfile();
 
-  // Main profile form state.
+  // ====================================================
+  // FORM STATE
+  // ====================================================
+
   const [b, setB] = useState<BasicsState | null>(null);
 
-  // Profile visibility.
   const [hidden, setHidden] = useState(false);
 
-  // Save state.
+  const [promptsTouched, setPromptsTouched] = useState(false);
+
+  // ====================================================
+  // AUTO-SAVE STATE
+  // ====================================================
+
   const [busy, setBusy] = useState(false);
 
-  // User feedback.
+  const [saveStatus, setSaveStatus] = useState<
+    'saved' | 'dirty' | 'saving' | 'error' | 'idle'
+  >('idle');
+
   const [msg, setMsg] = useState<{
     ok: boolean;
     text: string;
   } | null>(null);
 
-  // Tracks whether the user actually changed dating prompts.
-  // This prevents an untouched/empty prompt state from
-  // accidentally overwriting previously saved answers.
-  const [promptsTouched, setPromptsTouched] = useState(false);
+  // Every edit increments this version.
+  // This lets us detect edits made while a save is running.
+  const editVersionRef = useRef(0);
+
+  const [editVersion, setEditVersion] = useState(0);
+
+  const savingRef = useRef(false);
+
+  const dirtyRef = useRef(false);
+
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
+  // ====================================================
+  // MARK FORM AS CHANGED
+  // ====================================================
+
+  const markDirty = useCallback(() => {
+    editVersionRef.current += 1;
+
+    dirtyRef.current = true;
+
+    setEditVersion(editVersionRef.current);
+
+    setSaveStatus('dirty');
+
+    setMsg(null);
+  }, []);
 
   // ====================================================
   // LOAD EXISTING PROFILE DATA
@@ -120,15 +156,23 @@ export default function ProfileSettingsPage() {
 
       setMsg({
         ok: false,
-        text: 'Your saved dating prompts could not be read. Your existing database answers have been preserved.',
+        text:
+          'Your saved dating prompts could not be read. Your existing database answers have been preserved.',
       });
     }
 
-    // Convert JSONB array into the JSON string expected
-    // by BasicsForm.tsx.
     const promptString = promptResult.valid
       ? JSON.stringify(promptResult.answers)
       : '';
+
+    // A newly loaded profile is the clean baseline.
+    dirtyRef.current = false;
+
+    editVersionRef.current = 0;
+
+    setEditVersion(0);
+
+    setSaveStatus('saved');
 
     setHidden(
       profile.visibility_status === 'hidden'
@@ -162,7 +206,6 @@ export default function ProfileSettingsPage() {
       relationship_intention:
         profile.relationship_intention ?? '',
 
-      // Additional profile information.
       height: profile.height ?? '',
 
       occupation: profile.occupation ?? '',
@@ -171,21 +214,17 @@ export default function ProfileSettingsPage() {
 
       education_status: profile.education_status ?? '',
 
-      // Dating prompts loaded from JSONB.
       profile_prompts: promptString,
     });
-
   }, [profile]);
 
   // ====================================================
-  // HANDLE FORM CHANGES
+  // HANDLE PROFILE FORM CHANGES
   // ====================================================
 
   function handleChange(patch: Partial<BasicsState>) {
     setB(previous => {
-      if (!previous) {
-        return previous;
-      }
+      if (!previous) return previous;
 
       return {
         ...previous,
@@ -193,8 +232,6 @@ export default function ProfileSettingsPage() {
       };
     });
 
-    // Mark dating prompts as intentionally modified
-    // only when BasicsForm actually changes that field.
     if (
       Object.prototype.hasOwnProperty.call(
         patch,
@@ -204,34 +241,54 @@ export default function ProfileSettingsPage() {
       setPromptsTouched(true);
     }
 
-    setMsg(null);
+    markDirty();
+  }
+
+  // ====================================================
+  // HANDLE PROFILE VISIBILITY
+  // ====================================================
+
+  function handleVisibilityChange(value: boolean) {
+    setHidden(value);
+    markDirty();
   }
 
   // ====================================================
   // SAVE PROFILE
   // ====================================================
 
-  async function save() {
-    if (busy) return;
+  const save = useCallback(async () => {
+    if (savingRef.current) return;
 
     if (!uid || !profile || !b) {
+      setSaveStatus('error');
+
       setMsg({
         ok: false,
-        text: 'Your profile is not fully loaded. Please try again.',
+        text:
+          'Your profile is not fully loaded. Please try again.',
       });
 
       return;
     }
 
-    setMsg(null);
+    if (!dirtyRef.current) return;
 
-    // Keep a snapshot of the current form.
-    // Never clear it when an operation fails.
+    // Capture the exact version being saved.
+    const savingVersion = editVersionRef.current;
+
+    // Capture a snapshot of the current form.
     const current = b;
 
-    // -----------------------------------------------
+    const currentHidden = hidden;
+
+    const currentPromptsTouched = promptsTouched;
+
+    setMsg(null);
+
+    // ==================================================
     // VALIDATE EXISTING PROFILE FIELDS
-    // -----------------------------------------------
+    // ==================================================
 
     const result = basicsSchema.safeParse({
       ...current,
@@ -248,6 +305,8 @@ export default function ProfileSettingsPage() {
     });
 
     if (!result.success) {
+      setSaveStatus('error');
+
       setMsg({
         ok: false,
         text:
@@ -258,18 +317,21 @@ export default function ProfileSettingsPage() {
       return;
     }
 
-    // -----------------------------------------------
-    // PREPARE DATING PROMPT ANSWERS
-    // -----------------------------------------------
+    // ==================================================
+    // VALIDATE EXISTING SAVED PROMPTS
+    // ==================================================
 
     const savedPromptResult = parseProfilePrompts(
       profile.profile_prompts
     );
 
     if (!savedPromptResult.valid) {
+      setSaveStatus('error');
+
       setMsg({
         ok: false,
-        text: 'Your existing saved dating answers could not be read. Saving has been stopped to protect your data.',
+        text:
+          'Your existing saved dating answers could not be read. Saving has been stopped to protect your data.',
       });
 
       return;
@@ -277,17 +339,20 @@ export default function ProfileSettingsPage() {
 
     let nextPrompts = savedPromptResult.answers;
 
-    // If the user has intentionally changed prompts,
-    // validate the edited JSON before sending it.
-    if (promptsTouched) {
+    // Only overwrite saved prompts if the user actually
+    // changed the prompt field.
+    if (currentPromptsTouched) {
       const editedPromptResult = parseProfilePrompts(
         current.profile_prompts
       );
 
       if (!editedPromptResult.valid) {
+        setSaveStatus('error');
+
         setMsg({
           ok: false,
-          text: 'Your dating prompt data is invalid. Your previously saved answers have not been changed.',
+          text:
+            'Your dating prompt data is invalid. Your previously saved answers have not been changed.',
         });
 
         return;
@@ -296,11 +361,13 @@ export default function ProfileSettingsPage() {
       nextPrompts = editedPromptResult.answers;
     }
 
-    // -----------------------------------------------
-    // VALIDATE ADDITIONAL PROFILE FIELDS
-    // -----------------------------------------------
+    // ==================================================
+    // VALIDATE ADDITIONAL REQUIRED PROFILE FIELDS
+    // ==================================================
 
     if (!current.neighbourhood.trim()) {
+      setSaveStatus('error');
+
       setMsg({
         ok: false,
         text: 'Please enter your neighbourhood.',
@@ -310,6 +377,8 @@ export default function ProfileSettingsPage() {
     }
 
     if (!current.height?.trim()) {
+      setSaveStatus('error');
+
       setMsg({
         ok: false,
         text: 'Please select your height.',
@@ -319,6 +388,8 @@ export default function ProfileSettingsPage() {
     }
 
     if (!current.occupation?.trim()) {
+      setSaveStatus('error');
+
       setMsg({
         ok: false,
         text: 'Please enter your occupation.',
@@ -328,6 +399,8 @@ export default function ProfileSettingsPage() {
     }
 
     if (!current.college?.trim()) {
+      setSaveStatus('error');
+
       setMsg({
         ok: false,
         text: 'Please enter your college or university.',
@@ -337,6 +410,8 @@ export default function ProfileSettingsPage() {
     }
 
     if (!current.education_status?.trim()) {
+      setSaveStatus('error');
+
       setMsg({
         ok: false,
         text: 'Please select your education status.',
@@ -345,14 +420,13 @@ export default function ProfileSettingsPage() {
       return;
     }
 
-    // -----------------------------------------------
-    // BUILD DATABASE PAYLOAD
-    // -----------------------------------------------
+    // ==================================================
+    // BUILD EXISTING DATABASE PAYLOAD
+    // ==================================================
 
     const d = result.data;
 
     const payload = {
-      // Existing profile fields.
       display_name: d.display_name,
 
       gender: d.gender,
@@ -370,11 +444,10 @@ export default function ProfileSettingsPage() {
       relationship_intention:
         d.relationship_intention ?? null,
 
-      visibility_status: hidden
+      visibility_status: currentHidden
         ? 'hidden' as const
         : 'visible' as const,
 
-      // Additional profile fields.
       height: current.height.trim(),
 
       occupation: current.occupation.trim(),
@@ -384,33 +457,52 @@ export default function ProfileSettingsPage() {
       education_status:
         current.education_status.trim(),
 
-      // JSONB array, NOT a JSON string.
+      // Supabase JSONB array.
       profile_prompts: nextPrompts,
 
     } satisfies Parameters<typeof updateProfile>[1];
 
-    // -----------------------------------------------
+    // ==================================================
     // EXECUTE SAVE
-    // -----------------------------------------------
+    // ==================================================
+
+    savingRef.current = true;
 
     setBusy(true);
+
+    setSaveStatus('saving');
 
     try {
       await updateProfile(uid, payload);
 
-      // Read the saved record again.
-      await reload();
+      // Only mark clean if no newer edit was made
+      // while this request was running.
+      if (editVersionRef.current === savingVersion) {
+        dirtyRef.current = false;
 
-      setMsg({
-        ok: true,
-        text: 'Your profile has been saved successfully.',
-      });
+        setPromptsTouched(false);
 
+        setSaveStatus('saved');
+
+        setMsg({
+          ok: true,
+          text: 'All your profile changes have been saved.',
+        });
+      } else {
+        // Newer edits exist. Keep them pending.
+        dirtyRef.current = true;
+
+        setSaveStatus('dirty');
+      }
     } catch (e) {
       console.error(
         'Profile settings save failed:',
         e
       );
+
+      dirtyRef.current = true;
+
+      setSaveStatus('error');
 
       setMsg({
         ok: false,
@@ -419,14 +511,89 @@ export default function ProfileSettingsPage() {
             ? e.message
             : 'Could not save your profile. Please try again.',
       });
-
-      // Do not clear b.
-      // Do not reset the prompt answers.
-      // Do not overwrite the form after a failed save.
-
     } finally {
+      savingRef.current = false;
+
       setBusy(false);
     }
+  }, [
+    uid,
+    profile,
+    b,
+    hidden,
+    promptsTouched,
+  ]);
+
+  // ====================================================
+  // AUTOMATIC SAVE
+  // ====================================================
+
+  useEffect(() => {
+    if (!dirtyRef.current || !b || !profile || !uid) {
+      return;
+    }
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    // Wait until the user has stopped typing/changing fields.
+    // Avoid saving incomplete required fields.
+    const requiredFieldsComplete = Boolean(
+      b.neighbourhood.trim() &&
+      b.height?.trim() &&
+      b.occupation?.trim() &&
+      b.college?.trim() &&
+      b.education_status?.trim()
+    );
+
+    if (!requiredFieldsComplete) {
+      setSaveStatus('dirty');
+      return;
+    }
+
+    saveTimerRef.current = setTimeout(() => {
+      void save();
+    }, 1000);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [
+    b,
+    hidden,
+    promptsTouched,
+    profile,
+    uid,
+    editVersion,
+    save,
+  ]);
+
+  // ====================================================
+  // CLEAN UP PENDING TIMER
+  // ====================================================
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  // ====================================================
+  // MANUAL SAVE / RETRY
+  // ====================================================
+
+  function handleManualSave() {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    void save();
   }
 
   // ====================================================
@@ -451,7 +618,6 @@ export default function ProfileSettingsPage() {
   if (error) {
     return (
       <div className="card space-y-3 p-5">
-
         <h2 className="font-bold text-bad">
           Could not load your profile
         </h2>
@@ -467,7 +633,6 @@ export default function ProfileSettingsPage() {
         >
           Retry loading
         </button>
-
       </div>
     );
   }
@@ -479,7 +644,6 @@ export default function ProfileSettingsPage() {
   if (!uid || !profile || !b) {
     return (
       <div className="card space-y-3 p-5">
-
         <h2 className="font-bold">
           Profile not found
         </h2>
@@ -496,7 +660,6 @@ export default function ProfileSettingsPage() {
         >
           Reload profile
         </button>
-
       </div>
     );
   }
@@ -514,22 +677,66 @@ export default function ProfileSettingsPage() {
 
       <section className="card p-5">
 
-        <h1 className="mb-1 text-xl font-extrabold">
-          Your profile
-        </h1>
+        <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-extrabold">
+            Your profile
+          </h1>
+
+          {/* AUTO-SAVE STATUS */}
+
+          <div
+            className="flex items-center gap-1.5 text-xs font-semibold"
+            role="status"
+            aria-live="polite"
+          >
+            {saveStatus === 'saving' && (
+              <>
+                <Cloud className="h-4 w-4 animate-pulse text-blue-500" />
+                <span className="text-blue-500">
+                  Saving…
+                </span>
+              </>
+            )}
+
+            {saveStatus === 'saved' && (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <span className="text-emerald-600">
+                  Saved
+                </span>
+              </>
+            )}
+
+            {saveStatus === 'dirty' && (
+              <>
+                <Cloud className="h-4 w-4 text-slate-400" />
+                <span className="text-slate-500">
+                  Unsaved changes
+                </span>
+              </>
+            )}
+
+            {saveStatus === 'error' && (
+              <>
+                <AlertCircle className="h-4 w-4 text-red-500" />
+                <span className="text-red-500">
+                  Save failed
+                </span>
+              </>
+            )}
+          </div>
+        </div>
 
         <p className="mb-4 text-sm">
-
           <Link
             to="/settings"
             className="font-semibold text-royal"
           >
             Account and privacy settings
           </Link>
-
         </p>
 
-        {/* Existing profile form. */}
+        {/* EXISTING PROFILE FORM */}
 
         <BasicsForm
           v={b}
@@ -542,19 +749,16 @@ export default function ProfileSettingsPage() {
         {/* ======================================== */}
 
         <label className="mt-4 flex items-start gap-2">
-
           <input
             type="checkbox"
             className="mt-1"
             checked={hidden}
-            onChange={e => {
-              setHidden(e.target.checked);
-              setMsg(null);
-            }}
+            onChange={e =>
+              handleVisibilityChange(e.target.checked)
+            }
           />
 
           <span>
-
             <span className="font-semibold">
               Hide my profile
             </span>
@@ -566,13 +770,11 @@ export default function ProfileSettingsPage() {
               People you already matched with can still
               message you.
             </span>
-
           </span>
-
         </label>
 
         {/* ======================================== */}
-        {/* SAVE MESSAGE                             */}
+        {/* SAVE FEEDBACK                             */}
         {/* ======================================== */}
 
         {msg && (
@@ -587,19 +789,25 @@ export default function ProfileSettingsPage() {
         )}
 
         {/* ======================================== */}
-        {/* SAVE BUTTON                              */}
+        {/* MANUAL SAVE / RETRY                       */}
         {/* ======================================== */}
 
         <button
           type="button"
           className="btn-primary mt-4 w-full"
-          disabled={busy}
-          onClick={() => void save()}
+          disabled={busy || !dirtyRef.current}
+          onClick={handleManualSave}
         >
           {busy
             ? 'Saving your profile…'
-            : 'Save changes'}
+            : saveStatus === 'error'
+              ? 'Retry saving'
+              : 'Save changes now'}
         </button>
+
+        <p className="mt-3 text-center text-xs text-slate2">
+          Your profile automatically saves after you stop editing.
+        </p>
 
       </section>
 
@@ -614,7 +822,6 @@ export default function ProfileSettingsPage() {
         </h2>
 
         <p className="mt-1 flex items-center gap-2 text-slate2">
-
           {profile.verified ? (
             <>
               <BadgeCheck className="h-5 w-5 text-royal" />
@@ -623,7 +830,6 @@ export default function ProfileSettingsPage() {
           ) : (
             'Add a verified badge by submitting a selfie.'
           )}
-
         </p>
 
         <Link
