@@ -451,9 +451,17 @@ function ShellBody() {
 
         {/* PAGE CONTENT */}
 
-        <main className="mx-auto max-w-5xl px-4 py-5 sm:px-6 md:py-8">
-          <Outlet />
-        </main>
+        <main
+  className={
+    loc.pathname.startsWith('/chat/')
+      ? 'h-[calc(100dvh-5rem)] w-full max-w-none overflow-hidden p-0 md:h-screen'
+      : loc.pathname === '/inbox'
+        ? 'h-[calc(100dvh-8.25rem)] w-full max-w-none overflow-hidden p-0 md:h-screen'
+        : 'mx-auto max-w-5xl px-4 py-5 sm:px-6 md:py-8'
+  }
+>
+  <Outlet />
+</main>
       </div>
 
       {/* MOBILE BOTTOM NAVIGATION */}

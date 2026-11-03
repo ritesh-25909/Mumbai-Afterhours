@@ -82,53 +82,32 @@ export default function ChatPage() {
   }, [load]);
 
   useEffect(() => {
-    return () => window.clearTimeout(timer.current);
+    return () => {
+      window.clearTimeout(timer.current);
+    };
   }, []);
 
   useMessageEvents(reloadSoon);
 
   return (
     <div
-      className={
-        id
-          ? `
-            relative
-            -mx-4 -my-5
-            h-[calc(100dvh-4.5rem-env(safe-area-inset-bottom))]
-            w-[calc(100%+2rem)]
-            overflow-hidden
-            bg-[#03060d]
-            text-white
-
-            sm:-mx-6
-            sm:w-[calc(100%+3rem)]
-
-            md:mx-0 md:my-0
-            md:h-[calc(100dvh-3rem)]
-            md:w-full
-            md:rounded-2xl
-            md:border md:border-slate-800
-          `
-          : `
-            card
-            flex
-            h-[calc(100dvh-10.5rem)]
-            overflow-hidden
-            md:h-[calc(100dvh-3rem)]
-          `
-      }
+      className="
+        flex h-full min-h-0 w-full
+        overflow-hidden
+        bg-[#03060d] text-white
+      "
     >
-
-      {/* CONVERSATION LIST */}
+      {/* DESKTOP CONVERSATION LIST */}
 
       <section
         className={`
-          ${id ? 'hidden md:block' : 'block'}
-          w-full
-          border-r border-slate-800
-          bg-[#050912]
-          md:w-80
+          ${id ? 'hidden md:flex' : 'flex'}
+          w-full md:w-[340px]
           md:shrink-0
+          flex-col
+          overflow-hidden
+          border-r border-white/[0.08]
+          bg-[#050912]
         `}
         aria-label="Conversations"
       >
@@ -145,10 +124,9 @@ export default function ChatPage() {
 
       <section
         className={`
-          ${id ? 'block' : 'hidden md:grid'}
-          min-w-0
-          flex-1
-          place-items-center
+          ${id ? 'flex' : 'hidden md:flex'}
+          min-w-0 flex-1
+          flex-col
           overflow-hidden
           bg-[#03060d]
         `}
@@ -162,9 +140,27 @@ export default function ChatPage() {
             onRead={reloadSoon}
           />
         ) : (
-          <p className="text-slate2">
-            Select a conversation.
-          </p>
+          <div className="flex h-full flex-col items-center justify-center bg-[#03060d] px-6 text-center">
+            <div className="mb-5 grid h-20 w-20 place-items-center rounded-full border border-blue-400/20 bg-blue-500/10 text-blue-400">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="h-9 w-9"
+              >
+                <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z" />
+              </svg>
+            </div>
+
+            <h2 className="text-xl font-bold text-white">
+              Your conversations
+            </h2>
+
+            <p className="mt-2 max-w-sm text-sm text-slate-400">
+              Select a conversation to start connecting.
+            </p>
+          </div>
         )}
       </section>
     </div>
