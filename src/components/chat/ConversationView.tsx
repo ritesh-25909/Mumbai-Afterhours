@@ -37,6 +37,7 @@ import { unmatch } from '../../features/matches/api';
 import {
   useMessageEvents,
   useRealtimeLive,
+  useUserOnline,
 } from '../../features/messaging/ChatEvents';
 
 import { ReportBlock } from '../discover/ReportBlock';
@@ -98,6 +99,10 @@ export function ConversationView({
   const [head, setHead] = useState<
     ConversationHeader | null | undefined
   >(undefined);
+
+  // Actual presence status of the other user.
+  // This is not hardcoded.
+  const isOnline = useUserOnline(head?.user_id);
 
   const [msgs, setMsgs] = useState<UIMsg[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -209,7 +214,9 @@ export function ConversationView({
     ]);
   }, [id, read]);
 
-  /* INITIAL LOAD AND CLEANUP */
+  /* =====================================================
+     INITIAL LOAD AND CLEANUP
+  ===================================================== */
 
   useEffect(() => {
     void load();
@@ -232,7 +239,9 @@ export function ConversationView({
     }
   }, [msgs]);
 
-  /* REALTIME MESSAGES */
+  /* =====================================================
+     REALTIME MESSAGES
+  ===================================================== */
 
   useMessageEvents((m) => {
     if (m.conversation_id !== id) return;
@@ -393,17 +402,24 @@ export function ConversationView({
     void deliver(m);
   }
 
-  /* EMOJI INSERTION */
+  /* =====================================================
+     EMOJI INSERTION
+  ===================================================== */
 
   function insertEmoji() {
     const emoji = '😊';
+
     setText((current) => current + emoji);
     textarea.current?.focus();
   }
 
-  /* ENTER TO SEND */
+  /* =====================================================
+     ENTER TO SEND
+  ===================================================== */
 
-  function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+  function handleKeyDown(
+    e: KeyboardEvent<HTMLTextAreaElement>
+  ) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -448,6 +464,7 @@ export function ConversationView({
       <div className="flex h-full min-h-0 w-full flex-col bg-[#03060d]">
         <div className="flex items-center gap-3 border-b border-white/10 p-4">
           <div className="h-12 w-12 animate-pulse rounded-full bg-slate-800" />
+
           <div className="space-y-2">
             <div className="h-4 w-32 animate-pulse rounded bg-slate-800" />
             <div className="h-3 w-16 animate-pulse rounded bg-slate-800" />
@@ -462,7 +479,9 @@ export function ConversationView({
     );
   }
 
-  /* ERROR */
+  /* =====================================================
+     ERROR
+  ===================================================== */
 
   if (err && !head) {
     return (
@@ -483,7 +502,9 @@ export function ConversationView({
     );
   }
 
-  /* CLOSED CONVERSATION */
+  /* =====================================================
+     CLOSED CONVERSATION
+  ===================================================== */
 
   if (!head || !head.is_open) {
     return (
@@ -525,9 +546,7 @@ export function ConversationView({
         <div className="absolute -bottom-40 -right-36 h-96 w-96 rounded-full bg-blue-700/15 blur-[120px]" />
       </div>
 
-      {/* =================================================
-          CHAT HEADER
-      ================================================= */}
+      {/* CHAT HEADER */}
 
       <header className="relative z-10 flex h-[76px] shrink-0 items-center gap-3 border-b border-white/[0.09] bg-[#050912]/95 px-3 sm:px-5">
 
@@ -570,9 +589,26 @@ export function ConversationView({
               )}
             </span>
 
-            <span className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-400 sm:text-sm">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
-              Online
+            {/* REAL PRESENCE STATUS */}
+
+            <span className="mt-0.5 flex items-center gap-1.5 text-xs sm:text-sm">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isOnline
+                    ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]'
+                    : 'bg-slate-500'
+                }`}
+              />
+
+              <span
+                className={
+                  isOnline
+                    ? 'font-medium text-emerald-400'
+                    : 'text-slate-400'
+                }
+              >
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
             </span>
           </span>
         </Link>
@@ -588,9 +624,7 @@ export function ConversationView({
         </button>
       </header>
 
-      {/* =================================================
-          CHAT MENU
-      ================================================= */}
+      {/* CHAT MENU */}
 
       {menu && (
         <div className="relative z-20 shrink-0 space-y-3 border-b border-white/10 bg-[#090f1c] p-4">
@@ -612,9 +646,7 @@ export function ConversationView({
         </div>
       )}
 
-      {/* =================================================
-          MESSAGES AREA
-      ================================================= */}
+      {/* MESSAGES AREA */}
 
       <div
         className="
@@ -739,9 +771,7 @@ export function ConversationView({
         <div ref={bottom} />
       </div>
 
-      {/* =================================================
-          PREMIUM FULL-WIDTH MESSAGE COMPOSER
-      ================================================= */}
+      {/* PREMIUM FULL-WIDTH MESSAGE COMPOSER */}
 
       <div className="relative z-10 shrink-0 border-t border-white/[0.08] bg-[#050912]/95 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-3 sm:px-5">
 
@@ -822,9 +852,7 @@ export function ConversationView({
         </form>
       </div>
 
-      {/* =================================================
-          UNMATCH MODAL
-      ================================================= */}
+      {/* UNMATCH MODAL */}
 
       <Modal
         open={unmatchOpen}
