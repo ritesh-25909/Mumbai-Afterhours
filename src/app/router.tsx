@@ -6,6 +6,7 @@ import AuthPage from '../pages/AuthPage';
 import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 import { RequireProfile } from '../features/profiles/RequireProfile';
 import { AppShell } from '../components/layout/AppShell';
+import { useAuth } from '../features/auth/AuthProvider';
 
 import OnboardingPage from '../pages/OnboardingPage';
 import ProfileSettingsPage from '../pages/ProfileSettingsPage';
@@ -27,68 +28,150 @@ import {
   SafetyPage,
   TermsPage,
   PrivacyPage,
-  HelpPage
+  HelpPage,
 } from '../pages/LegalPages';
+
+/* =====================================================
+   PUBLIC LANDING REDIRECT
+===================================================== */
+
+function LandingRoute() {
+  const { session } = useAuth();
+
+  if (session?.user?.id) {
+    return <Navigate to="/discover" replace />;
+  }
+
+  return <LandingPage />;
+}
+
+/* =====================================================
+   ROUTER
+===================================================== */
 
 export const router = createBrowserRouter(
   [
-    // Public routes
-    { path: '/', element: <LandingPage /> },
-    { path: '/login', element: <AuthPage mode="login" /> },
-    { path: '/signup', element: <AuthPage mode="signup" /> },
-    { path: '/verify-email', element: <EmailVerificationPage /> },
-    { path: '/reset-password', element: <ResetPasswordPage /> },
-    { path: '/safety', element: <SafetyPage /> },
-    { path: '/terms', element: <TermsPage /> },
-    { path: '/privacy', element: <PrivacyPage /> },
-    { path: '/help', element: <HelpPage /> },
+    // PUBLIC ROUTES
+    {
+      path: '/',
+      element: <LandingRoute />,
+    },
+    {
+      path: '/login',
+      element: <AuthPage mode="login" />,
+    },
+    {
+      path: '/signup',
+      element: <AuthPage mode="signup" />,
+    },
+    {
+      path: '/verify-email',
+      element: <EmailVerificationPage />,
+    },
+    {
+      path: '/reset-password',
+      element: <ResetPasswordPage />,
+    },
+    {
+      path: '/safety',
+      element: <SafetyPage />,
+    },
+    {
+      path: '/terms',
+      element: <TermsPage />,
+    },
+    {
+      path: '/privacy',
+      element: <PrivacyPage />,
+    },
+    {
+      path: '/help',
+      element: <HelpPage />,
+    },
 
-    // Authentication protection
+    // AUTHENTICATION PROTECTION
     {
       element: <ProtectedRoute />,
       children: [
-        { path: '/onboarding', element: <OnboardingPage /> },
-        { path: '/delete-account', element: <DeleteAccountPage /> },
+        {
+          path: '/onboarding',
+          element: <OnboardingPage />,
+        },
+        {
+          path: '/delete-account',
+          element: <DeleteAccountPage />,
+        },
 
-        // Profile protection
+        // PROFILE PROTECTION
         {
           element: <RequireProfile />,
           children: [
             {
               element: <AppShell />,
               children: [
-                { path: '/discover', element: <DiscoverPage /> },
-                { path: '/matches', element: <MatchesPage /> },
-                { path: '/inbox', element: <ChatPage /> },
-                { path: '/chat/:id', element: <ChatPage /> },
-
-                // Matched user's full profile
+                {
+                  path: '/discover',
+                  element: <DiscoverPage />,
+                },
+                {
+                  path: '/matches',
+                  element: <MatchesPage />,
+                },
+                {
+                  path: '/inbox',
+                  element: <ChatPage />,
+                },
+                {
+                  path: '/chat/:id',
+                  element: <ChatPage />,
+                },
                 {
                   path: '/user/:userId',
-                  element: <UserProfilePage />
+                  element: <UserProfilePage />,
                 },
-
-                { path: '/profile', element: <ProfileSettingsPage /> },
-                { path: '/verify', element: <SelfieVerificationPage /> },
-                { path: '/moderation', element: <ModerationPage /> },
-                { path: '/moderation/reports', element: <ModerationReportsPage /> },
-                { path: '/settings', element: <AccountSettingsPage /> },
-                { path: '/subscription', element: <SubscriptionPage /> },
-                { path: '/settings/privacy', element: <PrivacySettingsPage /> }
-              ]
-            }
-          ]
-        }
-      ]
+                {
+                  path: '/profile',
+                  element: <ProfileSettingsPage />,
+                },
+                {
+                  path: '/verify',
+                  element: <SelfieVerificationPage />,
+                },
+                {
+                  path: '/moderation',
+                  element: <ModerationPage />,
+                },
+                {
+                  path: '/moderation/reports',
+                  element: <ModerationReportsPage />,
+                },
+                {
+                  path: '/settings',
+                  element: <AccountSettingsPage />,
+                },
+                {
+                  path: '/subscription',
+                  element: <SubscriptionPage />,
+                },
+                {
+                  path: '/settings/privacy',
+                  element: <PrivacySettingsPage />,
+                },
+              ],
+            },
+          ],
+        },
+      ],
     },
 
-    // Unknown routes
+    // UNKNOWN ROUTES
     {
       path: '*',
-      element: <Navigate to="/" replace />
-    }
+      element: <Navigate to="/" replace />,
+    },
   ],
   {
-    basename: import.meta.env.BASE_URL.replace(/\/$/, '') || undefined
+    basename:
+      import.meta.env.BASE_URL.replace(/\/$/, '') || undefined,
   }
 );
