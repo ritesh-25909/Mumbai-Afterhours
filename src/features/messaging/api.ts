@@ -37,60 +37,6 @@ export type ConversationHeader = {
   photoUrl: string | null;
 };
 
-// ─── CONVERSATION LIST ───────────────────────────────────
-
-// Conversations are returned immediately.
-// Photo URLs are resolved independently in the background.
-
-export async function listConversations(
-  onPhotosLoaded?: (items: ConversationItem[]) => void
-): Promise<ConversationItem[]> {
-  const { data, error } = await supabase.rpc('list_conversations');
-
-  if (error) {
-    throw new Error(
-      'Could not load your conversations. Check your connection and try again.'
-    );
-  }
-
-  const rows = (data ?? []) as Omit<ConversationItem, 'photoUrl'>[];
-
-  const items: ConversationItem[] = rows.map(row => ({
-    ...row,
-    photoUrl: null
-  }));
-
-  if (!items.length) return items;
-
-  // Sign profile photos without blocking the conversation list.
-  const photoPaths = [
-    ...new Set(
-      rows
-        .map(row => row.photo_path)
-        .filter((path): path is string => !!path)
-    )
-  ];
-
-  if (photoPaths.length && onPhotosLoaded) {
-    void signPhotoPaths(photoPaths)
-      .then(urls => {
-        const updated = items.map(item => ({
-          ...item,
-          photoUrl: item.photo_path
-            ? urls[item.photo_path] ?? null
-            : null
-        }));
-
-        onPhotosLoaded(updated);
-      })
-      .catch(() => {
-        // Photos must never block conversations.
-      });
-  }
-
-  return items;
-}
-
 // ─── SINGLE CONVERSATION HEADER ──────────────────────────
 
 export async function getConversation(
@@ -113,8 +59,109 @@ export async function getConversation(
 
   return {
     ...row,
-    photoUrl: null
+    photoUrl: null,
   };
+}
+
+// ─── CONVERSATION LIST ───────────────────────────────────
+
+export async function listConversations(
+  onPhotosLoaded?: (items: ConversationItem[]) => void
+): Promise<ConversationItem[]> {
+  const { data, error } = await supabase.rpc('list_conversations');
+
+  if (error) {
+    throw new Error(
+      'Could not load your conversations. Check your connection and try again.'
+    );
+  }
+
+  const rows = (data ?? []) as Omit<
+    ConversationItem,
+    'photoUrl'
+  >[];
+
+  const items: ConversationItem[] = rows.map((row) => ({
+    ...row,
+    photo_path: row.photo_path || null,
+    photoUrl: null,
+  }));
+
+  if (!items.length) return items;
+
+  // Resolve photos independently so the conversation list
+  // appears immediately without waiting for image URLs.
+  void (async () => {
+    try {
+      // STEP 1: Collect photo paths already returned by the list RPC.
+      const resolvedItems = [...items];
+
+      // STEP 2: For missing photo paths, use the existing
+      // get_conversation RPC as a fallback.
+      const missingPhotoItems = resolvedItems.filter(
+        (item) => !item.photo_path
+      );
+
+      const fallbackResults = await Promise.allSettled(
+        missingPhotoItems.map((item) =>
+          getConversation(item.conversation_id)
+        )
+      );
+
+      fallbackResults.forEach((result, index) => {
+        if (result.status !== 'fulfilled') return;
+
+        const header = result.value;
+
+        if (!header?.photo_path) return;
+
+        const item = missingPhotoItems[index];
+
+        const original = resolvedItems.find(
+          (candidate) =>
+            candidate.conversation_id === item.conversation_id
+        );
+
+        if (original) {
+          original.photo_path = header.photo_path;
+        }
+      });
+
+      // STEP 3: Sign all available profile photo paths together.
+      const photoPaths = [
+        ...new Set(
+          resolvedItems
+            .map((item) => item.photo_path)
+            .filter((path): path is string => Boolean(path))
+        ),
+      ];
+
+      if (photoPaths.length === 0) {
+        return;
+      }
+
+      const urls = await signPhotoPaths(photoPaths);
+
+      // STEP 4: Attach signed URLs to their corresponding users.
+      const updatedItems = resolvedItems.map((item) => ({
+        ...item,
+        photoUrl: item.photo_path
+          ? urls[item.photo_path] ?? null
+          : null,
+      }));
+
+      // STEP 5: Update the UI without reloading conversations.
+      onPhotosLoaded?.(updatedItems);
+    } catch (e) {
+      console.error(
+        'Could not resolve conversation profile photos:',
+        e
+      );
+    }
+  })();
+
+  // Return conversations immediately.
+  return items;
 }
 
 // ─── MESSAGE PAGINATION ──────────────────────────────────
@@ -175,7 +222,7 @@ export async function sendMessage(
       id,
       conversation_id: conv,
       sender_user_id: sender,
-      content
+      content,
     });
 
   if (!error) return;
