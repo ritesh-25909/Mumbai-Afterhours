@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '../features/auth/AuthProvider';
 import {
   listConversations,
-  type ConversationItem
+  type ConversationItem,
 } from '../features/messaging/api';
 
 import { useMessageEvents } from '../features/messaging/ChatEvents';
@@ -37,7 +37,6 @@ export default function ChatPage() {
   const load = useCallback(async () => {
     const version = ++requestVersion.current;
 
-    // Only show loading when there is no cached content.
     if (!conversationCache.has(uid)) {
       setLoading(true);
     }
@@ -89,10 +88,48 @@ export default function ChatPage() {
   useMessageEvents(reloadSoon);
 
   return (
-    <div className="card flex h-[calc(100dvh-10.5rem)] overflow-hidden md:h-[calc(100dvh-3rem)]">
+    <div
+      className={
+        id
+          ? `
+            relative
+            -mx-4 -my-5
+            h-[calc(100dvh-4.5rem-env(safe-area-inset-bottom))]
+            w-[calc(100%+2rem)]
+            overflow-hidden
+            bg-[#03060d]
+            text-white
+
+            sm:-mx-6
+            sm:w-[calc(100%+3rem)]
+
+            md:mx-0 md:my-0
+            md:h-[calc(100dvh-3rem)]
+            md:w-full
+            md:rounded-2xl
+            md:border md:border-slate-800
+          `
+          : `
+            card
+            flex
+            h-[calc(100dvh-10.5rem)]
+            overflow-hidden
+            md:h-[calc(100dvh-3rem)]
+          `
+      }
+    >
+
+      {/* CONVERSATION LIST */}
 
       <section
-        className={`${id ? 'hidden md:block' : 'block'} w-full border-r border-line md:w-80 md:shrink-0`}
+        className={`
+          ${id ? 'hidden md:block' : 'block'}
+          w-full
+          border-r border-slate-800
+          bg-[#050912]
+          md:w-80
+          md:shrink-0
+        `}
         aria-label="Conversations"
       >
         <ConversationList
@@ -104,8 +141,17 @@ export default function ChatPage() {
         />
       </section>
 
+      {/* ACTIVE CONVERSATION */}
+
       <section
-        className={`${id ? 'block' : 'hidden md:grid'} min-w-0 flex-1 place-items-center`}
+        className={`
+          ${id ? 'block' : 'hidden md:grid'}
+          min-w-0
+          flex-1
+          place-items-center
+          overflow-hidden
+          bg-[#03060d]
+        `}
         aria-label="Conversation"
       >
         {id ? (
