@@ -10,6 +10,7 @@ export type Msg = {
   sender_user_id: string;
   content: string;
   created_at: string;
+  expires_at?: string | null;
 };
 
 export type ConversationItem = {
@@ -42,12 +43,34 @@ export type ChatPrivacySettings = {
   activity_status_enabled: boolean;
 };
 
-// ─── CHAT PRIVACY SETTINGS ──────────────────────────────
+export type ConversationSettings = {
+  notifications_muted: boolean;
+};
+
+export type VanishSettings = {
+  enabled: boolean;
+  enabled_by: string | null;
+  enabled_at: string | null;
+};
+
+// ─── DEFAULT SETTINGS ────────────────────────────────────
 
 export const DEFAULT_CHAT_PRIVACY: ChatPrivacySettings = {
   read_receipts_enabled: true,
   activity_status_enabled: true,
 };
+
+export const DEFAULT_CONVERSATION_SETTINGS: ConversationSettings = {
+  notifications_muted: false,
+};
+
+export const DEFAULT_VANISH_SETTINGS: VanishSettings = {
+  enabled: false,
+  enabled_by: null,
+  enabled_at: null,
+};
+
+// ─── CHAT PRIVACY SETTINGS ──────────────────────────────
 
 export async function getChatPrivacySettings(): Promise<ChatPrivacySettings> {
   const { data, error } = await supabase
@@ -135,6 +158,101 @@ export async function updateMyLastActive(): Promise<void> {
 
   if (error) {
     console.error('Could not update activity timestamp:', error.message);
+  }
+}
+
+// ─── CONVERSATION MUTE SETTINGS ───────────────────────────
+
+export async function getConversationSettings(
+  conversationId: string
+): Promise<ConversationSettings> {
+  const { data, error } = await supabase
+    .from('conversation_user_settings')
+    .select('notifications_muted')
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error('Could not load conversation settings.');
+  }
+
+  return data
+    ? {
+        notifications_muted: data.notifications_muted,
+      }
+    : DEFAULT_CONVERSATION_SETTINGS;
+}
+
+export async function setConversationMuted(
+  conversationId: string,
+  muted: boolean
+): Promise<void> {
+  const { data: authData, error: authError } =
+    await supabase.auth.getUser();
+
+  if (authError || !authData.user) {
+    throw new Error('Please sign in again.');
+  }
+
+  const { error } = await supabase
+    .from('conversation_user_settings')
+    .upsert(
+      {
+        conversation_id: conversationId,
+        user_id: authData.user.id,
+        notifications_muted: muted,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'conversation_id,user_id',
+      }
+    );
+
+  if (error) {
+    console.error('Mute settings update failed:', error.message);
+    throw new Error('Could not update notification settings.');
+  }
+}
+
+// ─── VANISH MODE SETTINGS ────────────────────────────────
+
+export async function getVanishSettings(
+  conversationId: string
+): Promise<VanishSettings> {
+  const { data, error } = await supabase
+    .from('conversation_vanish_settings')
+    .select('enabled,enabled_by,enabled_at')
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error('Could not load Vanish Mode settings.');
+  }
+
+  return data
+    ? {
+        enabled: data.enabled,
+        enabled_by: data.enabled_by,
+        enabled_at: data.enabled_at,
+      }
+    : DEFAULT_VANISH_SETTINGS;
+}
+
+export async function setVanishMode(
+  conversationId: string,
+  enabled: boolean
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    'set_conversation_vanish_mode',
+    {
+      p_conversation_id: conversationId,
+      p_enabled: enabled,
+    }
+  );
+
+  if (error) {
+    console.error('Vanish Mode update failed:', error.message);
+    throw new Error('Could not update Vanish Mode.');
   }
 }
 
@@ -262,11 +380,16 @@ export async function fetchMessages(
   conv: string,
   before?: string
 ): Promise<Msg[]> {
+  const now = new Date().toISOString();
+
   let query = supabase
     .from('messages')
-    .select('id,sender_user_id,content,created_at')
+    .select(
+      'id,conversation_id,sender_user_id,content,created_at,expires_at'
+    )
     .eq('conversation_id', conv)
     .is('deleted_at', null)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
     .order('created_at', { ascending: false })
     .limit(PAGE);
 
@@ -277,6 +400,8 @@ export async function fetchMessages(
   const { data, error } = await query;
 
   if (error) {
+    console.error('Message loading failed:', error.message);
+
     throw new Error(
       'Could not load messages. Check your connection and try again.'
     );
