@@ -17,17 +17,32 @@ import {
   Send,
   AlertCircle,
   Smile,
+  Search,
+  Bell,
+  BellOff,
+  Eye,
+  EyeOff,
+  Settings,
+  CheckCheck,
+  X,
 } from 'lucide-react';
 
 import {
   fetchMessages,
   getConversation,
   markRead,
+  getPeerReadAt,
+  getPeerActivity,
+  getConversationSettings,
+  setConversationMuted,
+  getVanishSettings,
+  setVanishMode,
   sendMessage,
   SendError,
   PAGE,
   type ConversationHeader,
   type Msg,
+  type VanishSettings,
 } from '../../features/messaging/api';
 
 import { signPhotoPaths } from '../../features/discovery/api';
@@ -38,6 +53,7 @@ import {
   useMessageEvents,
   useRealtimeLive,
   useUserOnline,
+  useChatPrivacy,
 } from '../../features/messaging/ChatEvents';
 
 import { ReportBlock } from '../discover/ReportBlock';
@@ -95,6 +111,7 @@ export function ConversationView({
 }) {
   const nav = useNavigate();
   const live = useRealtimeLive();
+  const { privacy } = useChatPrivacy();
 
   const [head, setHead] = useState<
     ConversationHeader | null | undefined
@@ -115,6 +132,13 @@ export function ConversationView({
   const [menu, setMenu] = useState(false);
   const [unmatchOpen, setUnmatchOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [peerReadAt, setPeerReadAt] = useState<string | null>(null);
+  const [peerActivity, setPeerActivity] = useState<string | null>(null);
+  const [muted, setMuted] = useState(false);
+  const [vanish, setVanish] = useState<VanishSettings>({ enabled: false, enabled_by: null, enabled_at: null });
+  const [menuSearch, setMenuSearch] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
 
   const bottom = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -134,6 +158,82 @@ export function ConversationView({
         // Read receipts should not block the chat.
       });
   }, [id, onRead]);
+
+  /* =====================================================
+     RECEIPTS, ACTIVITY AND CONVERSATION PREFERENCES
+  ===================================================== */
+
+  const refreshConversationMeta = useCallback(async () => {
+    if (!privacy.read_receipts_enabled) setPeerReadAt(null);
+    else setPeerReadAt(await getPeerReadAt(id));
+
+    if (!privacy.activity_status_enabled) setPeerActivity(null);
+    else setPeerActivity(await getPeerActivity(id));
+
+    const [conversationSettings, vanishSettings] = await Promise.all([
+      getConversationSettings(id),
+      getVanishSettings(id),
+    ]);
+    setMuted(conversationSettings.notifications_muted);
+    setVanish(vanishSettings);
+  }, [id, privacy.read_receipts_enabled, privacy.activity_status_enabled]);
+
+  useEffect(() => {
+    void refreshConversationMeta().catch((e) => console.error('Chat settings refresh failed:', e));
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void refreshConversationMeta().catch(() => {});
+      }
+    }, 10000);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshConversationMeta().catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [refreshConversationMeta]);
+
+  async function toggleMute() {
+    setActionBusy(true);
+    try {
+      await setConversationMuted(id, !muted);
+      setMuted(!muted);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  async function toggleVanish() {
+    const next = !vanish.enabled;
+    const confirmed = window.confirm(
+      next
+        ? 'Enable Vanish Mode for both people? New messages will expire after 24 hours.'
+        : 'Turn off Vanish Mode? New messages will no longer expire automatically.'
+    );
+    if (!confirmed) return;
+    setActionBusy(true);
+    try {
+      await setVanishMode(id, next);
+      await refreshConversationMeta();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  const activityLabel = isOnline
+    ? 'Online'
+    : peerActivity
+      ? (() => {
+          const minutes = Math.max(0, Math.floor((Date.now() - new Date(peerActivity).getTime()) / 60000));
+          return minutes < 1 ? 'Active now' : `Active ${minutes} min ago`;
+        })()
+      : 'Offline';
 
   /* =====================================================
      FAST CONVERSATION LOADING
@@ -607,7 +707,7 @@ export function ConversationView({
                     : 'text-slate-400'
                 }
               >
-                {isOnline ? 'Online' : 'Offline'}
+                {privacy.activity_status_enabled ? activityLabel : ''}
               </span>
             </span>
           </span>
@@ -625,24 +725,39 @@ export function ConversationView({
       </header>
 
       {/* CHAT MENU */}
-
       {menu && (
-        <div className="relative z-20 shrink-0 space-y-3 border-b border-white/10 bg-[#090f1c] p-4">
-          <ReportBlock
-            uid={uid}
-            targetId={head.user_id!}
-            name={head.display_name!}
-            onBlocked={() => nav('/inbox')}
-          />
-
-          <div className="text-center">
-            <button
-              className="text-sm font-medium text-red-400 underline underline-offset-4"
-              onClick={() => setUnmatchOpen(true)}
-            >
-              Unmatch
-            </button>
+        <div className="relative z-20 shrink-0 space-y-2 border-b border-white/10 bg-[#090f1c] p-4">
+          <Link to={`/user/${head.user_id}`} onClick={() => setMenu(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white hover:bg-white/10">
+            <BadgeCheck className="h-4 w-4 text-blue-400" /> View Profile
+          </Link>
+          <button type="button" onClick={() => setMenuSearch((v) => !v)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10">
+            <Search className="h-4 w-4" /> Search in Chat
+          </button>
+          {menuSearch && (
+            <div className="flex items-center gap-2 px-2">
+              <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search messages..." className="field min-w-0 flex-1" />
+              <button type="button" aria-label="Clear search" onClick={() => { setSearchTerm(''); setMenuSearch(false); }} className="rounded-lg p-2 text-slate-300 hover:bg-white/10"><X className="h-4 w-4" /></button>
+            </div>
+          )}
+          <button type="button" disabled={actionBusy} onClick={() => void toggleMute()} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50">
+            {muted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+            {muted ? 'Unmute Notifications' : 'Mute Notifications'}
+          </button>
+          <button type="button" disabled={actionBusy} onClick={() => void toggleVanish()} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50">
+            {vanish.enabled ? <Eye className="h-4 w-4 text-emerald-400" /> : <EyeOff className="h-4 w-4" />}
+            {vanish.enabled ? 'Turn Off Vanish Mode' : 'Enable Vanish Mode'}
+          </button>
+          <Link to="/settings/privacy" onClick={() => setMenu(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white hover:bg-white/10">
+            <Settings className="h-4 w-4" /> Chat Settings / Privacy
+          </Link>
+          <div className="border-t border-white/10 pt-2">
+            <ReportBlock uid={uid} targetId={head.user_id!} name={head.display_name!} onBlocked={() => nav('/inbox')} />
+            <div className="text-center">
+              <button className="text-sm font-medium text-red-400 underline underline-offset-4" onClick={() => setUnmatchOpen(true)}>Unmatch</button>
+            </div>
           </div>
+          {vanish.enabled && <p className="px-3 text-xs text-emerald-300">Vanish Mode is on. New messages expire after 24 hours.</p>}
+          {muted && <p className="px-3 text-xs text-slate-400">Notifications are muted for this conversation on your account.</p>}
         </div>
       )}
 
@@ -685,13 +800,13 @@ export function ConversationView({
           </div>
         )}
 
-        {msgs.map((m, i) => {
+        {msgs.filter((m) => !searchTerm.trim() || m.content.toLowerCase().includes(searchTerm.trim().toLowerCase())).map((m, i, visibleMsgs) => {
           const mine = m.sender_user_id === uid;
 
           const newDay =
             i === 0 ||
             new Date(m.created_at).toDateString() !==
-              new Date(msgs[i - 1].created_at).toDateString();
+              new Date(visibleMsgs[i - 1].created_at).toDateString();
 
           return (
             <div key={m.id}>
@@ -761,7 +876,12 @@ export function ConversationView({
                     </button>
                   </>
                 ) : (
-                  timeLabel(m.created_at)
+                  <>
+                    {timeLabel(m.created_at)}
+                    {mine && privacy.read_receipts_enabled && peerReadAt && new Date(peerReadAt).getTime() >= new Date(m.created_at).getTime() && (
+                      <CheckCheck className="h-4 w-4 text-emerald-400" aria-label="Read" />
+                    )}
+                  </>
                 )}
               </p>
             </div>
