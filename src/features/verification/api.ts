@@ -43,6 +43,14 @@ export async function review(id: string, decision: 'approved' | 'rejected' | 're
   return !del.error;
 }
 export async function myRoles(): Promise<string[]> {
-  const { data } = await supabase.rpc('my_roles');
+  const { data, error } = await supabase.rpc('my_roles');
+
+  console.log('MY ROLES RESPONSE:', { data, error });
+
+  if (error) {
+    console.error('MY ROLES ERROR:', error);
+    throw error;
+  }
+
   return (data as string[]) ?? [];
 }

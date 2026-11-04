@@ -1,7 +1,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, CheckCircle2, Cloud, AlertCircle } from 'lucide-react';
+import { myRoles } from '../features/verification/api';
+import {
+  BadgeCheck,
+  CheckCircle2,
+  Cloud,
+  AlertCircle,
+  ShieldCheck,
+} from 'lucide-react';
 
 import { useMyProfile } from '../features/profiles/useMyProfile';
 
@@ -71,6 +78,26 @@ function parseProfilePrompts(value: unknown): {
 // ======================================================
 
 export default function ProfileSettingsPage() {
+    const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    myRoles()
+      .then((roles) => {
+        if (active) {
+          setIsAdmin(roles.includes('admin'));
+        }
+      })
+      .catch((error) => {
+        console.error('Admin role verification failed:', error);
+        if (active) setIsAdmin(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
   const {
     uid,
     profile,
@@ -727,14 +754,24 @@ export default function ProfileSettingsPage() {
           </div>
         </div>
 
-        <p className="mb-4 text-sm">
-          <Link
-            to="/settings"
-            className="font-semibold text-royal"
-          >
-            Account and privacy settings
-          </Link>
-        </p>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+  <Link
+    to="/settings"
+    className="text-sm font-semibold text-royal"
+  >
+    Account and privacy settings
+  </Link>
+
+  {isAdmin && (
+    <Link
+      to="/admin"
+      className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-sm font-bold text-blue-400 transition hover:border-blue-400/60 hover:bg-blue-500/20"
+    >
+      <ShieldCheck className="h-4 w-4" />
+      Admin Panel
+    </Link>
+  )}
+</div>
 
         {/* EXISTING PROFILE FORM */}
 
