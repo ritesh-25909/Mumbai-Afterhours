@@ -37,6 +37,107 @@ export type ConversationHeader = {
   photoUrl: string | null;
 };
 
+export type ChatPrivacySettings = {
+  read_receipts_enabled: boolean;
+  activity_status_enabled: boolean;
+};
+
+// ─── CHAT PRIVACY SETTINGS ──────────────────────────────
+
+export const DEFAULT_CHAT_PRIVACY: ChatPrivacySettings = {
+  read_receipts_enabled: true,
+  activity_status_enabled: true,
+};
+
+export async function getChatPrivacySettings(): Promise<ChatPrivacySettings> {
+  const { data, error } = await supabase
+    .from('user_chat_settings')
+    .select('read_receipts_enabled,activity_status_enabled')
+    .maybeSingle();
+
+  if (error) {
+    throw new Error('Could not load chat privacy settings.');
+  }
+
+  return data
+    ? {
+        read_receipts_enabled: data.read_receipts_enabled,
+        activity_status_enabled: data.activity_status_enabled,
+      }
+    : DEFAULT_CHAT_PRIVACY;
+}
+
+export async function saveChatPrivacySettings(
+  settings: ChatPrivacySettings
+): Promise<void> {
+  const { data: authData, error: authError } =
+    await supabase.auth.getUser();
+
+  if (authError || !authData.user) {
+    throw new Error('Please sign in again.');
+  }
+
+  const { error } = await supabase
+    .from('user_chat_settings')
+    .upsert(
+      {
+        user_id: authData.user.id,
+        read_receipts_enabled: settings.read_receipts_enabled,
+        activity_status_enabled: settings.activity_status_enabled,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    );
+
+  if (error) {
+    throw new Error('Could not save chat privacy settings.');
+  }
+}
+
+// ─── PEER READ RECEIPT ───────────────────────────────────
+
+export async function getPeerReadAt(
+  conversationId: string
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_peer_read_at', {
+    conv: conversationId,
+  });
+
+  if (error) {
+    console.error('Read receipt lookup failed:', error.message);
+    return null;
+  }
+
+  return data ? String(data) : null;
+}
+
+// ─── PEER ACTIVITY STATUS ────────────────────────────────
+
+export async function getPeerActivity(
+  conversationId: string
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc('get_peer_activity', {
+    conv: conversationId,
+  });
+
+  if (error) {
+    console.error('Activity status lookup failed:', error.message);
+    return null;
+  }
+
+  return data ? String(data) : null;
+}
+
+// ─── UPDATE MY ACTIVITY ──────────────────────────────────
+
+export async function updateMyLastActive(): Promise<void> {
+  const { error } = await supabase.rpc('update_my_last_active');
+
+  if (error) {
+    console.error('Could not update activity timestamp:', error.message);
+  }
+}
+
 // ─── SINGLE CONVERSATION HEADER ──────────────────────────
 
 export async function getConversation(
@@ -89,15 +190,10 @@ export async function listConversations(
 
   if (!items.length) return items;
 
-  // Resolve photos independently so the conversation list
-  // appears immediately without waiting for image URLs.
   void (async () => {
     try {
-      // STEP 1: Collect photo paths already returned by the list RPC.
       const resolvedItems = [...items];
 
-      // STEP 2: For missing photo paths, use the existing
-      // get_conversation RPC as a fallback.
       const missingPhotoItems = resolvedItems.filter(
         (item) => !item.photo_path
       );
@@ -127,7 +223,6 @@ export async function listConversations(
         }
       });
 
-      // STEP 3: Sign all available profile photo paths together.
       const photoPaths = [
         ...new Set(
           resolvedItems
@@ -136,13 +231,10 @@ export async function listConversations(
         ),
       ];
 
-      if (photoPaths.length === 0) {
-        return;
-      }
+      if (photoPaths.length === 0) return;
 
       const urls = await signPhotoPaths(photoPaths);
 
-      // STEP 4: Attach signed URLs to their corresponding users.
       const updatedItems = resolvedItems.map((item) => ({
         ...item,
         photoUrl: item.photo_path
@@ -150,7 +242,6 @@ export async function listConversations(
           : null,
       }));
 
-      // STEP 5: Update the UI without reloading conversations.
       onPhotosLoaded?.(updatedItems);
     } catch (e) {
       console.error(
@@ -160,7 +251,6 @@ export async function listConversations(
     }
   })();
 
-  // Return conversations immediately.
   return items;
 }
 
