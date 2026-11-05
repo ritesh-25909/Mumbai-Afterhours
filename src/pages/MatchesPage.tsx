@@ -129,6 +129,24 @@ export default function MatchesPage() {
                   Liked {new Date(user.liked_at).toLocaleDateString('en-IN')}
                 </p>
 
+                {user.comment && (
+                  <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-blue-700">
+                      Their message
+                    </p>
+                    <p className="mt-1 break-words text-sm leading-6 text-slate-700">
+                      {user.comment}
+                    </p>
+                  </div>
+                )}
+
+                <Link
+                  to={`/user/${user.user_id}`}
+                  className="block text-center text-sm font-semibold text-royal underline-offset-4 hover:underline"
+                >
+                  View full profile
+                </Link>
+
                 <button
                   disabled={busyId !== null}
                   onClick={() => handleAction(user, 'like')}

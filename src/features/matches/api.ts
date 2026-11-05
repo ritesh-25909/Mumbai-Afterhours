@@ -26,6 +26,7 @@ export type IncomingLike = {
   photo_path: string | null;
   liked_at: string;
   photoUrl: string | null;
+  comment: string | null;
 };
 
 // ==========================================

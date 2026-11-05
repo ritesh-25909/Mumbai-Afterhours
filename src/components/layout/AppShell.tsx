@@ -13,6 +13,7 @@ import {
   MapPin,
   X,
 } from 'lucide-react';
+import { NotificationBell } from '../notifications/NotificationBell';
 
 import { useAuth } from '../../features/auth/AuthProvider';
 import { myRoles } from '../../features/verification/api';
@@ -444,6 +445,12 @@ function ShellBody() {
             </span>
           </div>
         )}
+
+        {/* GLOBAL NOTIFICATION CENTRE */}
+
+        <div className="relative z-30 px-4 pt-3 md:px-6">
+          <NotificationBell uid={session!.user.id} />
+        </div>
 
         {/* GLOBAL DISCOVER NEARBY REMINDER */}
 

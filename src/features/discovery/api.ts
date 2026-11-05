@@ -300,11 +300,15 @@ export async function fetchCandidates(): Promise<Candidate[]> {
 // ==========================================
 
 export async function likeUser(
-  id: string
+  id: string,
+  comment = ''
 ): Promise<{ matched: boolean; match_id: string | null }> {
   const { data, error } = await supabase.rpc(
-    'like_user',
-    { target: id }
+    'send_like',
+    {
+      target: id,
+      message: comment.trim() || null,
+    }
   );
 
   if (error) {
@@ -405,7 +409,7 @@ export async function fetchMatchedProfile(
   }
 
   const { data, error } = await supabase.rpc(
-    'get_matched_profile',
+    'get_profile_for_view',
     {
       target_user_id: userId,
     }

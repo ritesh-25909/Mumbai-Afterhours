@@ -39,6 +39,7 @@ export default function DiscoverPage() {
   const [exhausted, setExhausted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [matched, setMatched] = useState<Candidate | null>(null);
 
   const [myLocation, setMyLocation] =
@@ -188,19 +189,23 @@ export default function DiscoverPage() {
   // LIKE / PASS
   // =====================================================
 
-  async function act(kind: 'like' | 'pass') {
+  async function act(kind: 'like' | 'pass', comment = '') {
     if (!current || busy) return;
 
     setBusy(true);
     setErr(null);
+    setActionNotice(null);
 
     try {
       if (kind === 'like') {
-        const result = await likeUser(current.id);
+        const result = await likeUser(current.id, comment);
 
         if (result.matched && result.match_id) {
           localMatches.add(result.match_id);
           setMatched(current);
+          setActionNotice(null);
+        } else {
+          setActionNotice(`Like sent to ${current.display_name}.`);
         }
       } else {
         await passUser(current.id);
@@ -243,6 +248,25 @@ export default function DiscoverPage() {
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
 
+      {/* LIKE SUCCESS FEEDBACK */}
+
+      {actionNotice && (
+        <div
+          role="status"
+          className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800"
+        >
+          <span>{actionNotice}</span>
+          <button
+            type="button"
+            onClick={() => setActionNotice(null)}
+            className="rounded-lg px-2 py-1 text-emerald-700 hover:bg-emerald-100"
+            aria-label="Dismiss like confirmation"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* ERROR MESSAGE */}
 
       {err && (
@@ -278,7 +302,7 @@ export default function DiscoverPage() {
             c={distanceForCurrent}
             distanceKm={distanceForCurrent.distanceKm}
             busy={busy}
-            onLike={() => act('like')}
+            onLike={(comment) => act('like', comment)}
             onPass={() => act('pass')}
           />
 

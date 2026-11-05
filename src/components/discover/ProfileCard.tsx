@@ -5,6 +5,7 @@ import type { ElementType, PointerEvent } from 'react';
 import {
   BadgeCheck,
   Heart,
+  Send,
   X,
   MapPin,
   Navigation,
@@ -41,13 +42,15 @@ export function ProfileCard({
 }: {
   c: Candidate;
   busy: boolean;
-  onLike: () => void;
+  onLike: (comment?: string) => void;
   onPass: () => void;
   distanceKm?: number | null;
 }) {
   const candidate = c as ExtendedCandidate;
 
   const [dx, setDx] = useState(0);
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [comment, setComment] = useState('');
   const start = useRef<number | null>(null);
   const captured = useRef(false);
 
@@ -171,6 +174,16 @@ export function ProfileCard({
                 No profile photo available
               </div>
             )}
+
+            <button
+              type="button"
+              onClick={() => setCommentOpen(true)}
+              disabled={busy}
+              aria-label={`Like ${candidate.display_name} with an optional comment`}
+              className="absolute bottom-4 right-4 z-10 grid h-11 w-11 place-items-center rounded-full border border-white/30 bg-white/95 text-rose-600 shadow-lg transition hover:scale-105 hover:bg-white disabled:opacity-50"
+            >
+              <Heart className="h-5 w-5" fill="currentColor" />
+            </button>
 
             {dx > 40 && (
               <span className="absolute left-5 top-10 rounded-lg border-2 border-ok px-4 py-2 text-xl font-extrabold text-ok">
@@ -363,7 +376,7 @@ export function ProfileCard({
                   </div>
                 )}
 
-                <div className="overflow-hidden bg-mist">
+                <div className="relative overflow-hidden bg-mist">
                   <img
                     src={url}
                     alt={`${candidate.display_name}, photo ${photoIndex + 1}`}
@@ -371,6 +384,15 @@ export function ProfileCard({
                     draggable={false}
                     className="w-full object-cover"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setCommentOpen(true)}
+                    disabled={busy}
+                    aria-label={`Like ${candidate.display_name}'s photo ${photoIndex + 1}`}
+                    className="absolute bottom-4 right-4 grid h-10 w-10 place-items-center rounded-full border border-white/30 bg-white/95 text-rose-600 shadow-lg transition hover:scale-105 disabled:opacity-50"
+                  >
+                    <Heart className="h-5 w-5" fill="currentColor" />
+                  </button>
                 </div>
               </section>
 
@@ -412,6 +434,58 @@ export function ProfileCard({
           ))}
       </article>
 
+      {/* OPTIONAL PERSONALIZED LIKE MESSAGE */}
+      {commentOpen && (
+        <section className="mt-4 rounded-2xl border border-blue-100 bg-white p-4 shadow-card">
+          <label
+            htmlFor={`like-comment-${candidate.id}`}
+            className="block text-sm font-bold text-ink"
+          >
+            Add a personal comment <span className="font-normal text-slate2">(optional)</span>
+          </label>
+          <textarea
+            id={`like-comment-${candidate.id}`}
+            value={comment}
+            onChange={(event) => setComment(event.target.value.slice(0, 300))}
+            maxLength={300}
+            rows={3}
+            placeholder="Tell them what caught your attention..."
+            className="mt-2 w-full resize-none rounded-xl border border-line bg-mist/50 p-3 text-sm text-ink outline-none transition focus:border-royal focus:ring-2 focus:ring-royal/10"
+            disabled={busy}
+          />
+          <div className="mt-1 text-right text-xs text-slate2">
+            {comment.length}/300
+          </div>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => onLike(comment)}
+              disabled={busy}
+              className="btn-primary flex flex-1 items-center justify-center gap-2 py-3 disabled:opacity-50"
+            >
+              <Send className="h-4 w-4" />
+              {busy ? 'Sending…' : 'Send Like'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onLike('')}
+              disabled={busy}
+              className="btn-outline flex-1 py-3 disabled:opacity-50"
+            >
+              Send without comment
+            </button>
+            <button
+              type="button"
+              onClick={() => setCommentOpen(false)}
+              disabled={busy}
+              className="rounded-xl px-4 py-3 text-sm font-semibold text-slate2 hover:bg-mist"
+            >
+              Cancel
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* LIKE / PASS ACTIONS */}
       <div className="sticky bottom-3 z-20 mt-5 flex justify-center gap-7 rounded-full bg-white/90 py-3 backdrop-blur-md">
         <button
@@ -424,7 +498,7 @@ export function ProfileCard({
         </button>
 
         <button
-          onClick={onLike}
+          onClick={() => setCommentOpen(true)}
           disabled={busy}
           aria-label={`Like ${candidate.display_name}`}
           className="grid h-16 w-16 place-items-center rounded-full bg-royal text-white shadow-card disabled:opacity-50"

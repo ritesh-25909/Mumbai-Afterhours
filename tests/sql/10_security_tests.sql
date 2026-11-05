@@ -65,7 +65,7 @@ do $$ declare x uuid; begin
 do $$ declare a uuid := 'a0000000-0000-0000-0000-00000000000a'; b uuid := 'b0000000-0000-0000-0000-00000000000b'; r jsonb; begin
   perform t.as_user(a);
   perform t.ok('discover returns eligible profiles, not self', (select count(*) from discover_profiles(10,0)) >= 1 and not exists (select 1 from discover_profiles(10,0) where id = a));
-  perform t.fails('cannot insert like directly', format('insert into likes values (%L,%L)', a, b));
+  perform t.fails('cannot insert like directly', format('insert into likes(actor_user_id,target_user_id) values (%L,%L)', a, b));
   perform t.fails('cannot insert match directly', format('insert into matches(user_a_id,user_b_id) values (%L,%L)', a, b));
   perform t.fails('cannot like self', format('select like_user(%L)', a));
   r := like_user(b); perform t.ok('one-sided like does not match', (r->>'matched')::boolean = false);
