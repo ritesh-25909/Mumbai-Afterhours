@@ -1,14 +1,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { myRoles } from '../features/verification/api';
-import {
-  BadgeCheck,
-  CheckCircle2,
-  Cloud,
-  AlertCircle,
-  ShieldCheck,
-} from 'lucide-react';
+import { BadgeCheck, CheckCircle2, Cloud, AlertCircle } from 'lucide-react';
 
 import { useMyProfile } from '../features/profiles/useMyProfile';
 
@@ -78,26 +71,6 @@ function parseProfilePrompts(value: unknown): {
 // ======================================================
 
 export default function ProfileSettingsPage() {
-    const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-
-    myRoles()
-      .then((roles) => {
-        if (active) {
-          setIsAdmin(roles.includes('admin'));
-        }
-      })
-      .catch((error) => {
-        console.error('Admin role verification failed:', error);
-        if (active) setIsAdmin(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
   const {
     uid,
     profile,
@@ -240,6 +213,11 @@ export default function ProfileSettingsPage() {
       college: profile.college ?? '',
 
       education_status: profile.education_status ?? '',
+
+      // Restore the three lifestyle selections from the saved profile.
+      smoking: profile.smoking ?? '',
+      alcohol: profile.alcohol ?? '',
+      religion: profile.religion ?? '',
 
       profile_prompts: promptString,
     });
@@ -483,6 +461,11 @@ export default function ProfileSettingsPage() {
 
       education_status:
         current.education_status.trim(),
+
+      // Persist lifestyle selections together with the rest of profile basics.
+      smoking: current.smoking?.trim() || null,
+      alcohol: current.alcohol?.trim() || null,
+      religion: current.religion?.trim() || null,
 
       // Supabase JSONB array.
       profile_prompts: nextPrompts,
@@ -754,24 +737,14 @@ export default function ProfileSettingsPage() {
           </div>
         </div>
 
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-  <Link
-    to="/settings"
-    className="text-sm font-semibold text-royal"
-  >
-    Account and privacy settings
-  </Link>
-
-  {isAdmin && (
-    <Link
-      to="/admin"
-      className="inline-flex items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2.5 text-sm font-bold text-blue-400 transition hover:border-blue-400/60 hover:bg-blue-500/20"
-    >
-      <ShieldCheck className="h-4 w-4" />
-      Admin Panel
-    </Link>
-  )}
-</div>
+        <p className="mb-4 text-sm">
+          <Link
+            to="/settings"
+            className="font-semibold text-royal"
+          >
+            Account and privacy settings
+          </Link>
+        </p>
 
         {/* EXISTING PROFILE FORM */}
 
