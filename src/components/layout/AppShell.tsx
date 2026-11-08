@@ -12,6 +12,7 @@ import {
   ChevronRight,
   MapPin,
   X,
+  Gift,
 } from 'lucide-react';
 import { NotificationBell } from '../notifications/NotificationBell';
 
@@ -31,6 +32,7 @@ const base = [
   { to: '/matches', label: 'Matches', icon: Heart },
   { to: '/inbox', label: 'Messages', icon: MessageCircle },
   { to: '/profile', label: 'Profile', icon: UserRound },
+  { to: '/referrals', label: 'Invite & Earn', icon: Gift },
 ];
 
 const settingsLink = {
@@ -119,6 +121,9 @@ function ShellBody() {
   const showMobileHeader = MOBILE_HEADER_PATHS.includes(
     loc.pathname
   );
+  const showNotificationBell =
+    loc.pathname === '/discover' || loc.pathname === '/settings' ||
+    loc.pathname.startsWith('/settings/');
 
   /* Load unread messages */
 
@@ -392,21 +397,19 @@ function ShellBody() {
               </span>
             </Link>
 
-            <button
-              type="button"
-              onClick={signOut}
-              aria-label="Log out"
-              className="
-                ml-3 grid h-9 w-9 shrink-0
-                place-items-center rounded-xl
-                border border-white/10
-                bg-white/[0.05] text-slate-200
-                transition hover:border-blue-400/30
-                hover:bg-blue-500/10 hover:text-white
-              "
-            >
-              <LogOut className="h-[17px] w-[17px]" />
-            </button>
+            <div className="ml-3 flex shrink-0 items-center gap-2">
+              {showNotificationBell && (
+                <NotificationBell uid={session!.user.id} />
+              )}
+              <button
+                type="button"
+                onClick={signOut}
+                aria-label="Log out"
+                className="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.05] text-slate-200 transition hover:border-blue-400/30 hover:bg-blue-500/10 hover:text-white"
+              >
+                <LogOut className="h-[17px] w-[17px]" />
+              </button>
+            </div>
           </header>
         )}
 
@@ -448,9 +451,11 @@ function ShellBody() {
 
         {/* GLOBAL NOTIFICATION CENTRE */}
 
-        <div className="relative z-30 px-4 pt-3 md:px-6">
-          <NotificationBell uid={session!.user.id} />
-        </div>
+        {showNotificationBell && (
+          <div className={`relative z-30 px-4 pt-3 md:px-6 ${showMobileHeader ? 'hidden md:block' : ''}`}>
+            <NotificationBell uid={session!.user.id} />
+          </div>
+        )}
 
         {/* GLOBAL DISCOVER NEARBY REMINDER */}
 
