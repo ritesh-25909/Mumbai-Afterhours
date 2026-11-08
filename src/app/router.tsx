@@ -1,11 +1,8 @@
 
-import { useEffect, useState } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import LandingPage from '../pages/LandingPage';
 import AuthPage from '../pages/AuthPage';
-import TrustIntroduction from '../components/TrustIntroduction';
-
 import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 import { RequireProfile } from '../features/profiles/RequireProfile';
 import { AppShell } from '../components/layout/AppShell';
@@ -20,6 +17,7 @@ import DiscoverPage from '../pages/DiscoverPage';
 import MatchesPage from '../pages/MatchesPage';
 import ChatPage from '../pages/ChatPage';
 import SubscriptionPage from '../pages/SubscriptionPage';
+import ReferralPage from '../pages/ReferralPage';
 import AccountSettingsPage from '../pages/AccountSettingsPage';
 import PrivacySettingsPage from '../pages/PrivacySettingsPage';
 import DeleteAccountPage from '../pages/DeleteAccountPage';
@@ -34,64 +32,17 @@ import {
   HelpPage,
 } from '../pages/LegalPages';
 
-const TRUST_INTRO_KEY = 'ma_trust_intro_completed_v1';
-
 /* =====================================================
-   PUBLIC LANDING REDIRECT + TRUST INTRODUCTION
+   PUBLIC LANDING REDIRECT
 ===================================================== */
 
 function LandingRoute() {
-  const { session, loading } = useAuth();
+  const { session } = useAuth();
 
-  const [introCompleted, setIntroCompleted] = useState(false);
-  const [introChecked, setIntroChecked] = useState(false);
-
-  // Read onboarding status once.
-  useEffect(() => {
-    try {
-      setIntroCompleted(
-        localStorage.getItem(TRUST_INTRO_KEY) === 'true'
-      );
-    } catch (error) {
-      console.warn('Could not read introduction status:', error);
-    } finally {
-      setIntroChecked(true);
-    }
-  }, []);
-
-  // Never display the introduction while Supabase is restoring a session.
-  if (loading || !introChecked) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-white">
-        <div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-700" />
-      </div>
-    );
-  }
-
-  // Authenticated users always go directly to Discover.
   if (session?.user?.id) {
     return <Navigate to="/discover" replace />;
   }
 
-  // First-time visitors see the three trust screens.
-  if (!introCompleted) {
-    return (
-      <TrustIntroduction
-        onComplete={() => {
-          try {
-            localStorage.setItem(TRUST_INTRO_KEY, 'true');
-          } catch (error) {
-            console.warn('Could not save introduction status:', error);
-          }
-
-          setIntroCompleted(true);
-        }}
-      />
-    );
-  }
-
-  // Visitors who have already completed the introduction
-  // see the existing landing page.
   return <LandingPage />;
 }
 
@@ -202,6 +153,10 @@ export const router = createBrowserRouter(
                 {
                   path: '/subscription',
                   element: <SubscriptionPage />,
+                },
+                {
+                  path: '/referrals',
+                  element: <ReferralPage />,
                 },
                 {
                   path: '/settings/privacy',
