@@ -72,6 +72,34 @@ export const DEFAULT_VANISH_SETTINGS: VanishSettings = {
 
 // ─── CHAT PRIVACY SETTINGS ──────────────────────────────
 
+// Preserve Supabase's real error information so database/API issues can be
+// diagnosed instead of being hidden behind a generic message.
+function settingsError(
+  context: string,
+  error: {
+    message: string;
+    code?: string;
+    details?: string;
+    hint?: string;
+  }
+): Error {
+  console.error(`${context}:`, {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+  });
+
+  const parts = [
+    error.message,
+    error.code ? `Code: ${error.code}` : '',
+    error.details ? `Details: ${error.details}` : '',
+    error.hint ? `Hint: ${error.hint}` : '',
+  ].filter(Boolean);
+
+  return new Error(`${context}: ${parts.join(' | ')}`);
+}
+
 export async function getChatPrivacySettings(): Promise<ChatPrivacySettings> {
   const { data, error } = await supabase
     .from('user_chat_settings')
@@ -79,7 +107,7 @@ export async function getChatPrivacySettings(): Promise<ChatPrivacySettings> {
     .maybeSingle();
 
   if (error) {
-    throw new Error('Could not load chat privacy settings.');
+    throw settingsError('Could not load chat privacy settings', error);
   }
 
   return data
@@ -113,7 +141,7 @@ export async function saveChatPrivacySettings(
     );
 
   if (error) {
-    throw new Error('Could not save chat privacy settings.');
+    throw settingsError('Could not save chat privacy settings', error);
   }
 }
 
@@ -166,14 +194,23 @@ export async function updateMyLastActive(): Promise<void> {
 export async function getConversationSettings(
   conversationId: string
 ): Promise<ConversationSettings> {
+  // Scope the read to the signed-in participant as well as relying on RLS.
+  const { data: authData, error: authError } =
+    await supabase.auth.getUser();
+
+  if (authError || !authData.user) {
+    throw new Error('Please sign in again to load conversation settings.');
+  }
+
   const { data, error } = await supabase
     .from('conversation_user_settings')
     .select('notifications_muted')
     .eq('conversation_id', conversationId)
+    .eq('user_id', authData.user.id)
     .maybeSingle();
 
   if (error) {
-    throw new Error('Could not load conversation settings.');
+    throw settingsError('Could not load conversation settings', error);
   }
 
   return data
@@ -209,8 +246,7 @@ export async function setConversationMuted(
     );
 
   if (error) {
-    console.error('Mute settings update failed:', error.message);
-    throw new Error('Could not update notification settings.');
+    throw settingsError('Could not update notification settings', error);
   }
 }
 
@@ -226,7 +262,7 @@ export async function getVanishSettings(
     .maybeSingle();
 
   if (error) {
-    throw new Error('Could not load Vanish Mode settings.');
+    throw settingsError('Could not load Vanish Mode settings', error);
   }
 
   return data
@@ -251,8 +287,7 @@ export async function setVanishMode(
   );
 
   if (error) {
-    console.error('Vanish Mode update failed:', error.message);
-    throw new Error('Could not update Vanish Mode.');
+    throw settingsError('Could not update Vanish Mode', error);
   }
 }
 
