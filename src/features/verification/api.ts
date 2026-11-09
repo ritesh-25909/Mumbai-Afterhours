@@ -44,13 +44,9 @@ export async function review(id: string, decision: 'approved' | 'rejected' | 're
 }
 export async function myRoles(): Promise<string[]> {
   const { data, error } = await supabase.rpc('my_roles');
-
-  console.log('MY ROLES RESPONSE:', { data, error });
-
   if (error) {
-    console.error('MY ROLES ERROR:', error);
-    throw error;
+    console.error('MY ROLES RPC ERROR:', error);
+    throw new Error(error.message || 'Could not verify account permissions.');
   }
-
   return (data as string[]) ?? [];
 }

@@ -1,0 +1,25 @@
+MUMBAI AFTERHOURS — CONSOLIDATED FEATURE UPDATE
+
+This package combines the previous feature updates into one project:
+1. Like, optional comment, pass and mutual match.
+2. Centralized Supabase notifications.
+3. Referral links, referral dashboard and like-credit wallet.
+
+Install:
+- Back up your current project first.
+- Copy this package's project contents into your main mumbai-afterhours folder,
+  preserving paths and allowing file replacement.
+- Review and apply the SQL migrations in timestamp order:
+  20261105000001_likes_comments_notifications.sql
+  20261106000001_central_notifications.sql
+  20261107000001_referral_like_credits.sql
+- Keep your existing .env file. This archive intentionally does not contain
+  private environment credentials.
+- Run npm install if needed, then npm run build.
+- Test with two separate accounts before deploying.
+
+Important:
+This package is a consolidated set of source changes, not proof of a successful
+build or live database migration. Verify migration compatibility with the
+currently deployed Supabase schema before applying. Do not deploy until build
+and two-account tests pass.

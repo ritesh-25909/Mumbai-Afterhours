@@ -26,6 +26,7 @@ import {
 import { ProfilePreview } from '../components/profile/ProfilePreview';
 import { PhotoSlots } from '../components/photo-upload/PhotoSlots';
 import { Logo } from '../components/ui/Logo';
+import { claimPendingReferral } from '../features/referrals/api';
 
 const STEPS = ['About you', 'Preferences', 'Photos', 'Preview'];
 const MIN_PHOTOS = 3;
@@ -260,6 +261,8 @@ export default function OnboardingPage() {
             d.date_of_birth,
             payload,
           );
+          // Claim only after a brand-new profile has been created.
+          try { await claimPendingReferral(); } catch (referralError) { console.warn('Referral claim could not be completed:', referralError); }
         }
 
         await reload();

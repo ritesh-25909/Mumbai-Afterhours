@@ -12,9 +12,9 @@ import {
   ChevronRight,
   MapPin,
   X,
-  Gift,
 } from 'lucide-react';
 import { NotificationBell } from '../notifications/NotificationBell';
+import { supabase } from '../../lib/supabase';
 
 import { useAuth } from '../../features/auth/AuthProvider';
 import { myRoles } from '../../features/verification/api';
@@ -32,7 +32,6 @@ const base = [
   { to: '/matches', label: 'Matches', icon: Heart },
   { to: '/inbox', label: 'Messages', icon: MessageCircle },
   { to: '/profile', label: 'Profile', icon: UserRound },
-  { to: '/referrals', label: 'Invite & Earn', icon: Gift },
 ];
 
 const settingsLink = {
@@ -114,6 +113,7 @@ function ShellBody() {
   const loc = useLocation();
 
   const [unread, setUnread] = useState(0);
+  const [incomingLikes, setIncomingLikes] = useState(0);
   const [isMod, setIsMod] = useState(false);
 
   const { notice, dismiss } = useMatchNotifications(session?.user.id);
@@ -124,6 +124,23 @@ function ShellBody() {
   const showNotificationBell =
     loc.pathname === '/discover' || loc.pathname === '/settings' ||
     loc.pathname.startsWith('/settings/');
+
+  /* Keep the Matches / incoming-likes badge synced from Supabase. */
+  useEffect(() => {
+    const uid = session?.user.id;
+    if (!uid) return;
+    let active = true;
+    const refresh = async () => {
+      const { data, error } = await supabase.rpc('get_incoming_like_count');
+      if (!error && active) setIncomingLikes(Number(data) || 0);
+    };
+    void refresh();
+    const channel = supabase.channel(`incoming-likes-count:${uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'likes', filter: `target_user_id=eq.${uid}` }, () => { void refresh(); })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' }, () => { void refresh(); })
+      .subscribe();
+    return () => { active = false; void supabase.removeChannel(channel); };
+  }, [session?.user.id]);
 
   /* Load unread messages */
 
@@ -313,6 +330,11 @@ function ShellBody() {
                   {item.to === '/inbox' && unread > 0 && (
                     <span className="rounded-full border border-blue-300/20 bg-blue-500 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
                       {unread > 99 ? '99+' : unread}
+                    </span>
+                  )}
+                  {item.to === '/matches' && incomingLikes > 0 && (
+                    <span aria-label={`${incomingLikes} new likes`} className="rounded-full border border-pink-300/20 bg-pink-600 px-2.5 py-1 text-[10px] font-bold text-white shadow-sm">
+                      {incomingLikes > 99 ? '99+' : incomingLikes}
                     </span>
                   )}
 
@@ -511,6 +533,11 @@ function ShellBody() {
 
                   {item.to === '/inbox' && unread > 0 && (
                     <span className="absolute -right-2 -top-1 h-2.5 w-2.5 rounded-full border-2 border-[#040d20] bg-blue-400" />
+                  )}
+                  {item.to === '/matches' && incomingLikes > 0 && (
+                    <span className="absolute -right-3 -top-2 min-w-4 rounded-full border border-[#040d20] bg-pink-600 px-1 text-center text-[9px] font-extrabold leading-4 text-white">
+                      {incomingLikes > 99 ? '99+' : incomingLikes}
+                    </span>
                   )}
                 </span>
 

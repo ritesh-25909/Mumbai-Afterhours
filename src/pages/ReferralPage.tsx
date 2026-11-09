@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, Gift, Share2, Users, Sparkles } from 'lucide-react';
 import { getReferralDashboard, type ReferralDashboard } from '../features/referrals/api';
+import { SettingsNav } from '../components/settings/SettingsNav';
 
 export default function ReferralPage() {
   const [data, setData] = useState<ReferralDashboard | null>(null);
@@ -38,6 +39,8 @@ export default function ReferralPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5">
+      <h1 className="text-2xl font-extrabold">Settings</h1>
+      <SettingsNav />
       <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#071b3c] via-[#103b83] to-[#1760c8] p-6 text-white shadow-xl sm:p-8">
         <div className="flex items-center gap-2 text-blue-100"><Gift className="h-5 w-5"/><span className="text-sm font-semibold">Mumbai Afterhours referrals</span></div>
         <h1 className="mt-3 text-2xl font-extrabold sm:text-3xl">Bring your people. Earn more likes.</h1>

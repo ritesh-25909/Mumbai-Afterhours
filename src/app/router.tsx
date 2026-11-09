@@ -24,6 +24,10 @@ import DeleteAccountPage from '../pages/DeleteAccountPage';
 import ModerationReportsPage from '../pages/ModerationReportsPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
 import EmailVerificationPage from '../pages/EmailVerificationPage';
+import { AdminGuard } from '../admin/AdminGuard';
+import { AdminLayout } from '../admin/components/AdminLayout';
+import AdminDashboard from '../admin/pages/AdminDashboard';
+import {AdminUsers,AdminRoles,AdminCurated,AdminAudit,AdminRiskQueue,AdminAnnouncements,AdminHealth,AdminExport} from '../admin/pages/AdminOperations';
 
 import {
   SafetyPage,
@@ -95,6 +99,28 @@ export const router = createBrowserRouter(
       element: <ProtectedRoute />,
       children: [
         {
+          path: '/admin',
+          element: <AdminGuard><AdminLayout /></AdminGuard>,
+          children: [
+            { index: true, element: <AdminDashboard /> },
+            { path: 'moderation', element: <ModerationPage /> },
+            { path: 'reports', element: <ModerationReportsPage /> },
+            { path: 'users', element: <AdminUsers /> },
+            { path: 'permissions', element: <AdminRoles /> },
+            { path: 'recommendations', element: <AdminCurated /> },
+            { path: 'audit', element: <AdminAudit /> },
+            { path: 'risk-review', element: <AdminRiskQueue /> },
+            { path: 'announcements', element: <AdminAnnouncements /> },
+            { path: 'exports', element: <AdminExport /> },
+            { path: 'health', element: <AdminHealth /> },
+            { path: 'engagement', element: <Navigate to="/admin" replace /> },
+            { path: 'analytics', element: <Navigate to="/admin" replace /> },
+            { path: 'moderation-center', element: <Navigate to="/admin/reports" replace /> },
+            { path: 'admin-users', element: <Navigate to="/admin/permissions" replace /> },
+            { path: 'settings', element: <Navigate to="/admin/health" replace /> },
+          ],
+        },
+        {
           path: '/onboarding',
           element: <OnboardingPage />,
         },
@@ -155,8 +181,12 @@ export const router = createBrowserRouter(
                   element: <SubscriptionPage />,
                 },
                 {
-                  path: '/referrals',
+                  path: '/settings/referrals',
                   element: <ReferralPage />,
+                },
+                {
+                  path: '/referrals',
+                  element: <Navigate to="/settings/referrals" replace />,
                 },
                 {
                   path: '/settings/privacy',

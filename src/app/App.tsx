@@ -1,4 +1,9 @@
 import { RouterProvider } from 'react-router-dom';
 import { Providers } from './providers';
 import { router } from './router';
-export default function App() { return <Providers><RouterProvider router={router} /></Providers>; }
+import { useEffect } from 'react';
+import { captureReferralFromUrl } from '../features/referrals/api';
+export default function App() {
+  useEffect(() => { captureReferralFromUrl(); }, []);
+  return <Providers><RouterProvider router={router} /></Providers>;
+}

@@ -28,7 +28,25 @@ export default function ModerationPage() {
     } catch (e) { setErr((e as Error).message); }
   }, []);
 
-  useEffect(() => { myRoles().then(r => { const ok = r.includes('moderator') || r.includes('admin'); setAllowed(ok); if (ok) load(); }); }, [load]);
+  useEffect(() => {
+    let active = true;
+    const checkAccess = async () => {
+      try {
+        const roles = await myRoles();
+        const ok = roles.includes('moderator') || roles.includes('admin') || roles.includes('super_admin');
+        if (!active) return;
+        setAllowed(ok);
+        if (ok) await load();
+      } catch (error) {
+        if (active) {
+          setAllowed(false);
+          setErr(error instanceof Error ? error.message : 'Unable to verify moderation access.');
+        }
+      }
+    };
+    void checkAccess();
+    return () => { active = false; };
+  }, [load]);
 
   async function decide(it: Item, d: 'approved' | 'rejected' | 'retry') {
     setBusy(it.request_id); setMsg(null); setErr(null);

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAuth } from '../features/auth/AuthProvider';
+import { supabase } from '../lib/supabase';
 import { useMyProfile } from '../features/profiles/useMyProfile';
 
 import {
@@ -16,6 +17,8 @@ import { localMatches } from '../features/matches/useMatchNotifications';
 import { ProfileCard } from '../components/discover/ProfileCard';
 import { ReportBlock } from '../components/discover/ReportBlock';
 import { Modal } from '../components/ui/Modal';
+import { claimPendingReferral, getLikeCreditSummary, type LikeCreditSummary } from '../features/referrals/api';
+
 
 import {
   getCurrentLocation,
@@ -41,6 +44,7 @@ export default function DiscoverPage() {
   const [err, setErr] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [matched, setMatched] = useState<Candidate | null>(null);
+  const [credits, setCredits] = useState<LikeCreditSummary | null>(null);
 
   const [myLocation, setMyLocation] =
     useState<Coordinates | null>(null);
@@ -48,6 +52,27 @@ export default function DiscoverPage() {
   const handled = useRef(new Set<string>());
   const loadingMore = useRef(false);
   const locationAttempted = useRef(false);
+
+  useEffect(() => {
+    void claimPendingReferral().then(result => {
+      if (result.rewarded) {
+        setActionNotice('Referral confirmed! Your friend has joined Mumbai Afterhours.');
+        void getLikeCreditSummary().then(setCredits).catch(() => {});
+      }
+    }).catch(() => {});
+    if (window.sessionStorage.getItem('ma_referral_claim_success_v1') === '1') {
+      window.sessionStorage.removeItem('ma_referral_claim_success_v1');
+      setActionNotice('Referral confirmed! Your friend has joined Mumbai Afterhours.');
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => getLikeCreditSummary().then(value => { if (active) setCredits(value); }).catch(() => {});
+    void refresh();
+    const channel = supabase.channel(`like-wallet-${uid}`).on('postgres_changes', { event: '*', schema: 'public', table: 'like_credit_wallets', filter: `user_id=eq.${uid}` }, refresh).subscribe();
+    return () => { active = false; void supabase.removeChannel(channel); };
+  }, [uid]);
 
   // =====================================================
   // LOCATION
@@ -191,6 +216,10 @@ export default function DiscoverPage() {
 
   async function act(kind: 'like' | 'pass', comment = '') {
     if (!current || busy) return;
+    if (kind === 'like' && credits && credits.daily_free_remaining === 0 && credits.referral_bonus_credits === 0) {
+      setErr('You have used all 15 daily likes and have no referral bonus credits left. Visit Settings → Mumbai Afterhours referrals to earn 10 bonus likes when a friend joins.');
+      return;
+    }
 
     setBusy(true);
     setErr(null);
@@ -248,6 +277,17 @@ export default function DiscoverPage() {
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
 
+      {/* LIKE CREDIT BALANCES */}
+      {credits && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-white px-4 py-3 shadow-sm">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            <span className="font-semibold text-slate-800">♥ Likes left today: <strong className="text-blue-700">{credits.daily_free_remaining}/15</strong></span>
+            <span className="font-semibold text-slate-800">Bonus credits: <strong className="text-emerald-700">{credits.referral_bonus_credits}</strong></span>
+          </div>
+          <Link to="/settings/referrals" className="text-sm font-bold text-blue-700 hover:underline">Earn bonus likes</Link>
+        </div>
+      )}
+
       {/* LIKE SUCCESS FEEDBACK */}
 
       {actionNotice && (
@@ -281,6 +321,9 @@ export default function DiscoverPage() {
           "
         >
           {err}
+          {err.includes('15 daily likes') && (
+            <Link to="/settings/referrals" className="ml-2 font-bold underline">View referral rewards</Link>
+          )}
 
           {!current && (
             <button
@@ -302,6 +345,7 @@ export default function DiscoverPage() {
             c={distanceForCurrent}
             distanceKm={distanceForCurrent.distanceKm}
             busy={busy}
+            likeDisabled={!!credits && credits.daily_free_remaining === 0 && credits.referral_bonus_credits === 0}
             onLike={(comment) => act('like', comment)}
             onPass={() => act('pass')}
           />

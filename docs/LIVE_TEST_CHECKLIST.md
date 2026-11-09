@@ -6,12 +6,16 @@ policies and the Edge Function have **never been run**. Work through this list w
 (A, B, C) plus one moderator account. Tick each item. Any failure is a launch blocker unless noted.
 
 ## 0. Setup
-- [ ] Project created, all five migrations applied in order (`supabase db push`), no errors.
+- [ ] Project created and every migration in `supabase/migrations/` applied in filename order using `supabase db push`; confirm no errors. Do not manually apply only a subset.
 - [ ] Auth > Email enabled with "Confirm email" ON. Site URL and redirect URLs set (local and production).
 - [ ] Realtime enabled; `matches` and `messages` are in the `supabase_realtime` publication (Database > Replication).
 - [ ] Buckets `profile-photos` and `verification-selfies` exist and are **private**.
 - [ ] `.env` filled; `npm run dev` loads the landing page.
-- [ ] Moderator granted: `insert into user_roles values ('<uuid>','moderator');`
+- [ ] Moderator granted by trusted operator: `insert into public.user_roles (user_id, role) values ('<uuid>','moderator') on conflict do nothing;`
+- [ ] First Super Admin provisioned using the procedure in `docs/ADMIN_FOUNDATION.md`.
+- [ ] Verify ordinary user cannot call `admin_dashboard_stats()` successfully; verify admin and super_admin can.
+- [ ] Verify authenticated users cannot insert/update/delete rows in `user_roles`.
+- [ ] MFA is not implemented/enforced by this Phase 1 build. Do not treat the admin panel as production-secure until MFA is added and tested.
 
 ## 1. Auth
 - [ ] Sign up with email: verification email arrives; link returns you to the app; log in works.

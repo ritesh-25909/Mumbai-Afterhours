@@ -1,0 +1,6 @@
+-- Superseded by 20261109000001_admin_command_center_alignment.sql.
+-- The original draft in this file used admin_audit_events and an incompatible
+-- admin_list_users return signature. The supplied live schema already contains
+-- admin_audit_logs and admin_list_users(user_id, ..., entitlement_count).
+-- Keep this migration as a no-op so existing migration ordering remains stable;
+-- the aligned additive migration creates the missing server-side operations.

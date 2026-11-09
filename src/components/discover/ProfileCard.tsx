@@ -39,12 +39,14 @@ export function ProfileCard({
   onLike,
   onPass,
   distanceKm,
+  likeDisabled = false,
 }: {
   c: Candidate;
   busy: boolean;
   onLike: (comment?: string) => void;
   onPass: () => void;
   distanceKm?: number | null;
+  likeDisabled?: boolean;
 }) {
   const candidate = c as ExtendedCandidate;
 
@@ -90,7 +92,7 @@ export function ProfileCard({
 
   function up() {
     if (start.current !== null && captured.current && !busy) {
-      if (dx > 110) onLike();
+      if (dx > 110 && !likeDisabled) onLike();
       else if (dx < -110) onPass();
     }
 
@@ -178,7 +180,7 @@ export function ProfileCard({
             <button
               type="button"
               onClick={() => setCommentOpen(true)}
-              disabled={busy}
+              disabled={busy || likeDisabled}
               aria-label={`Like ${candidate.display_name} with an optional comment`}
               className="absolute bottom-4 right-4 z-10 grid h-11 w-11 place-items-center rounded-full border border-white/30 bg-white/95 text-rose-600 shadow-lg transition hover:scale-105 hover:bg-white disabled:opacity-50"
             >
@@ -460,7 +462,7 @@ export function ProfileCard({
             <button
               type="button"
               onClick={() => onLike(comment)}
-              disabled={busy}
+              disabled={busy || likeDisabled}
               className="btn-primary flex flex-1 items-center justify-center gap-2 py-3 disabled:opacity-50"
             >
               <Send className="h-4 w-4" />
@@ -469,7 +471,7 @@ export function ProfileCard({
             <button
               type="button"
               onClick={() => onLike('')}
-              disabled={busy}
+              disabled={busy || likeDisabled}
               className="btn-outline flex-1 py-3 disabled:opacity-50"
             >
               Send without comment
