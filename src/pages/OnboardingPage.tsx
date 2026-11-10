@@ -6,6 +6,10 @@ import {
   GraduationCap,
   Ruler,
   BriefcaseBusiness,
+  ShieldCheck,
+  LockKeyhole,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 import { useMyProfile } from '../features/profiles/useMyProfile';
@@ -29,6 +33,7 @@ import { Logo } from '../components/ui/Logo';
 import { claimPendingReferral } from '../features/referrals/api';
 
 const STEPS = ['About you', 'Preferences', 'Photos', 'Preview'];
+
 const MIN_PHOTOS = 3;
 const MAX_PHOTOS = 6;
 const MIN_COMPLETED_PROMPTS = 2;
@@ -49,11 +54,33 @@ const empty: BasicsState = {
   education_status: '',
   profile_prompts: '[]',
 
-  // New profile fields
   smoking: '',
   alcohol: '',
   religion: '',
 };
+
+const TRUST_INTRO_KEY = 'ma_trust_intro_completed_v1';
+
+const INTRO_SLIDES = [
+  {
+    icon: BadgeCheck,
+    title: 'Verified Profiles',
+    description:
+      'Discover genuine profiles and get to know people through meaningful connections. Selfie verification helps members build trust.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Safety Comes First',
+    description:
+      'Your safety matters. Block or report inappropriate behaviour and enjoy a respectful dating experience.',
+  },
+  {
+    icon: LockKeyhole,
+    title: 'Your Privacy Matters',
+    description:
+      'You control your privacy. Manage your visibility and personal information with the privacy settings available to you.',
+  },
+];
 
 /**
  * Converts profile_prompts into the array format expected by Supabase.
@@ -110,6 +137,24 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // One-time introduction state.
+  const [trustIntroStep, setTrustIntroStep] = useState<
+    number | null | 'checking'
+  >('checking');
+
+  // Determine whether this new user has already completed the introduction.
+  useEffect(() => {
+    if (loading || !uid) return;
+
+    const storageKey = `${TRUST_INTRO_KEY}_${uid}`;
+
+    if (!profile && localStorage.getItem(storageKey) !== '1') {
+      setTrustIntroStep(0);
+    } else {
+      setTrustIntroStep(null);
+    }
+  }, [uid, profile, loading]);
+
   // Load existing profile information into onboarding.
   useEffect(() => {
     if (!profile || !uid) return;
@@ -134,7 +179,6 @@ export default function OnboardingPage() {
         readPromptAnswers(profile.profile_prompts),
       ),
 
-      // Restore saved selections
       smoking: profile.smoking ?? '',
       alcohol: profile.alcohol ?? '',
       religion: profile.religion ?? '',
@@ -183,6 +227,113 @@ export default function OnboardingPage() {
   }
 
   if (!uid) return null;
+
+  // Wait until the one-time introduction status has been determined.
+  if (trustIntroStep === 'checking') {
+    return (
+      <p className="p-8 text-slate2" role="status">
+        Loading…
+      </p>
+    );
+  }
+
+  // Show the three welcome screens before profile creation.
+  if (trustIntroStep !== null) {
+    const currentSlide = INTRO_SLIDES[trustIntroStep];
+    const SlideIcon = currentSlide.icon;
+
+    function finishTrustIntroduction() {
+      localStorage.setItem(`${TRUST_INTRO_KEY}_${uid}`, '1');
+      setTrustIntroStep(null);
+    }
+
+    return (
+      <main className="grid min-h-screen place-items-center bg-gradient-to-br from-[#07111f] via-[#101e38] to-[#102b59] px-5 py-10">
+        <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white p-7 text-center shadow-2xl sm:p-9">
+
+          <div className="mb-8 flex justify-center">
+            <Logo />
+          </div>
+
+          <div className="mx-auto grid h-24 w-24 place-items-center rounded-3xl bg-blue-50 text-[#174fc5]">
+            <SlideIcon size={46} strokeWidth={1.7} />
+          </div>
+
+          <p className="mt-8 text-xs font-bold uppercase tracking-[0.25em] text-[#174fc5]">
+            Welcome to Mumbai Afterhours
+          </p>
+
+          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-[#10213e]">
+            {currentSlide.title}
+          </h1>
+
+          <p className="mt-4 text-sm leading-7 text-slate-500">
+            {currentSlide.description}
+          </p>
+
+          <div className="mt-9 flex justify-center gap-2">
+            {INTRO_SLIDES.map((_, index) => (
+              <span
+                key={index}
+                className={`h-2 rounded-full transition-all ${
+                  index === trustIntroStep
+                    ? 'w-8 bg-[#174fc5]'
+                    : 'w-2 bg-blue-100'
+                }`}
+              />
+            ))}
+          </div>
+
+          <div className="mt-9 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                setTrustIntroStep(current =>
+                  typeof current === 'number'
+                    ? Math.max(0, current - 1)
+                    : 0,
+                )
+              }
+              disabled={trustIntroStep === 0}
+              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-600 disabled:opacity-30"
+            >
+              <ChevronLeft size={17} />
+              Back
+            </button>
+
+            {trustIntroStep < INTRO_SLIDES.length - 1 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setTrustIntroStep(current =>
+                    typeof current === 'number'
+                      ? Math.min(INTRO_SLIDES.length - 1, current + 1)
+                      : 0,
+                  )
+                }
+                className="inline-flex items-center gap-2 rounded-xl bg-[#174fc5] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/20 hover:bg-[#123f9f]"
+              >
+                Continue
+                <ChevronRight size={17} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={finishTrustIntroduction}
+                className="rounded-xl bg-[#174fc5] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-blue-900/20 hover:bg-[#123f9f]"
+              >
+                Let's Get Started
+              </button>
+            )}
+          </div>
+
+          <p className="mt-6 text-xs text-slate-400">
+            Your journey starts here.
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   const userId = uid;
 
@@ -247,7 +398,6 @@ export default function OnboardingPage() {
 
           profile_prompts: promptAnswers,
 
-          // Save the new fields
           smoking: b.smoking?.trim() || null,
           alcohol: b.alcohol?.trim() || null,
           religion: b.religion?.trim() || null,
@@ -261,8 +411,16 @@ export default function OnboardingPage() {
             d.date_of_birth,
             payload,
           );
+
           // Claim only after a brand-new profile has been created.
-          try { await claimPendingReferral(); } catch (referralError) { console.warn('Referral claim could not be completed:', referralError); }
+          try {
+            await claimPendingReferral();
+          } catch (referralError) {
+            console.warn(
+              'Referral claim could not be completed:',
+              referralError,
+            );
+          }
         }
 
         await reload();
