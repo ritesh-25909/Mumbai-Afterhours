@@ -5,6 +5,9 @@ import LandingPage from '../pages/LandingPage';
 import AuthPage from '../pages/AuthPage';
 import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 import { RequireProfile } from '../features/profiles/RequireProfile';
+import { RequireMobileNumber } from '../features/profiles/RequireMobileNumber';
+import CompletePhonePage from '../pages/CompletePhonePage';
+import AdminStoragePage from '../admin/pages/AdminStoragePage';
 import { AppShell } from '../components/layout/AppShell';
 import { useAuth } from '../features/auth/AuthProvider';
 
@@ -99,98 +102,63 @@ export const router = createBrowserRouter(
       element: <ProtectedRoute />,
       children: [
         {
-          path: '/admin',
-          element: <AdminGuard><AdminLayout /></AdminGuard>,
+          element: <RequireMobileNumber />,
           children: [
-            { index: true, element: <AdminDashboard /> },
-            { path: 'moderation', element: <ModerationPage /> },
-            { path: 'reports', element: <ModerationReportsPage /> },
-            { path: 'users', element: <AdminUsers /> },
-            { path: 'permissions', element: <AdminRoles /> },
-            { path: 'recommendations', element: <AdminCurated /> },
-            { path: 'audit', element: <AdminAudit /> },
-            { path: 'risk-review', element: <AdminRiskQueue /> },
-            { path: 'announcements', element: <AdminAnnouncements /> },
-            { path: 'exports', element: <AdminExport /> },
-            { path: 'health', element: <AdminHealth /> },
-            { path: 'engagement', element: <Navigate to="/admin" replace /> },
-            { path: 'analytics', element: <Navigate to="/admin" replace /> },
-            { path: 'moderation-center', element: <Navigate to="/admin/reports" replace /> },
-            { path: 'admin-users', element: <Navigate to="/admin/permissions" replace /> },
-            { path: 'settings', element: <Navigate to="/admin/health" replace /> },
-          ],
-        },
-        {
-          path: '/onboarding',
-          element: <OnboardingPage />,
-        },
-        {
-          path: '/delete-account',
-          element: <DeleteAccountPage />,
-        },
-
-        // PROFILE PROTECTION
-        {
-          element: <RequireProfile />,
-          children: [
+            { path: '/complete-phone', element: <CompletePhonePage /> },
             {
-              element: <AppShell />,
+              path: '/admin',
+              element: <AdminGuard><AdminLayout /></AdminGuard>,
+              children: [
+                { index: true, element: <AdminDashboard /> },
+                { path: 'moderation', element: <ModerationPage /> },
+                { path: 'reports', element: <ModerationReportsPage /> },
+                { path: 'users', element: <AdminUsers /> },
+                { path: 'permissions', element: <AdminRoles /> },
+                { path: 'recommendations', element: <AdminCurated /> },
+                { path: 'audit', element: <AdminAudit /> },
+                { path: 'risk-review', element: <AdminRiskQueue /> },
+                { path: 'announcements', element: <AdminAnnouncements /> },
+                { path: 'exports', element: <AdminExport /> },
+                { path: 'health', element: <AdminHealth /> },
+                { path: 'storage', element: <AdminStoragePage /> },
+                { path: 'engagement', element: <Navigate to="/admin" replace /> },
+                { path: 'analytics', element: <Navigate to="/admin" replace /> },
+                { path: 'moderation-center', element: <Navigate to="/admin/reports" replace /> },
+                { path: 'admin-users', element: <Navigate to="/admin/permissions" replace /> },
+                { path: 'settings', element: <Navigate to="/admin/health" replace /> },
+              ],
+            },
+            {
+              path: '/onboarding',
+              element: <OnboardingPage />,
+            },
+            {
+              path: '/delete-account',
+              element: <DeleteAccountPage />,
+            },
+
+            // PROFILE PROTECTION
+            {
+              element: <RequireProfile />,
               children: [
                 {
-                  path: '/discover',
-                  element: <DiscoverPage />,
-                },
-                {
-                  path: '/matches',
-                  element: <MatchesPage />,
-                },
-                {
-                  path: '/inbox',
-                  element: <ChatPage />,
-                },
-                {
-                  path: '/chat/:id',
-                  element: <ChatPage />,
-                },
-                {
-                  path: '/user/:userId',
-                  element: <UserProfilePage />,
-                },
-                {
-                  path: '/profile',
-                  element: <ProfileSettingsPage />,
-                },
-                {
-                  path: '/verify',
-                  element: <SelfieVerificationPage />,
-                },
-                {
-                  path: '/moderation',
-                  element: <ModerationPage />,
-                },
-                {
-                  path: '/moderation/reports',
-                  element: <ModerationReportsPage />,
-                },
-                {
-                  path: '/settings',
-                  element: <AccountSettingsPage />,
-                },
-                {
-                  path: '/subscription',
-                  element: <SubscriptionPage />,
-                },
-                {
-                  path: '/settings/referrals',
-                  element: <ReferralPage />,
-                },
-                {
-                  path: '/referrals',
-                  element: <Navigate to="/settings/referrals" replace />,
-                },
-                {
-                  path: '/settings/privacy',
-                  element: <PrivacySettingsPage />,
+                  element: <AppShell />,
+                  children: [
+                    { path: '/discover', element: <DiscoverPage /> },
+                    { path: '/matches', element: <MatchesPage /> },
+                    { path: '/inbox', element: <ChatPage /> },
+                    { path: '/chat/:id', element: <ChatPage /> },
+                    { path: '/user/:userId', element: <UserProfilePage /> },
+                    { path: '/profile', element: <ProfileSettingsPage /> },
+                    { path: '/verify', element: <SelfieVerificationPage /> },
+                    { path: '/moderation', element: <ModerationPage /> },
+                    { path: '/moderation/reports', element: <ModerationReportsPage /> },
+                    { path: '/settings', element: <AccountSettingsPage /> },
+                    { path: '/subscription', element: <SubscriptionPage /> },
+                    { path: '/settings/referrals', element: <ReferralPage /> },
+                    { path: '/referrals', element: <Navigate to="/settings/referrals" replace /> },
+                    { path: '/settings/privacy', element: <PrivacySettingsPage /> },
+                  ],
                 },
               ],
             },

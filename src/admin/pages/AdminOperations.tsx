@@ -193,16 +193,64 @@ export function AdminRiskQueue() {
 }
 
 export function AdminAnnouncements() {
-  const [title, setTitle] = useState(''), [body, setBody] = useState(''), [path, setPath] = useState(''), [busy, setBusy] = useState(false), [feedback, setFeedback] = useState('');
+  const [title, setTitle] = useState(''), [body, setBody] = useState(''), [path, setPath] = useState('');
+  const [audience, setAudience] = useState<'all' | 'single'>('all');
+  const [memberSearch, setMemberSearch] = useState(''), [recipient, setRecipient] = useState('');
+  const [members, setMembers] = useState<User[]>([]), [membersLoading, setMembersLoading] = useState(false), [membersError, setMembersError] = useState('');
+  const [busy, setBusy] = useState(false), [feedback, setFeedback] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    async function loadMembers() {
+      setMembersLoading(true); setMembersError('');
+      try {
+        const all: User[] = []; let offset = 0;
+        while (true) {
+          const { data, error } = await supabase.rpc('admin_list_members', { p_search: null, p_limit: 200, p_offset: offset });
+          if (error) throw error;
+          const rows = (data ?? []) as User[]; all.push(...rows);
+          if (rows.length < 200) break;
+          offset += rows.length;
+          if (all.length >= 20000) break;
+        }
+        if (active) setMembers(all);
+      } catch (e) { if (active) setMembersError(e instanceof Error ? e.message : 'Could not load members.'); }
+      finally { if (active) setMembersLoading(false); }
+    }
+    void loadMembers();
+    return () => { active = false; };
+  }, []);
+
+  const filteredMembers = members.filter(member => `${member.display_name} ${member.city} ${member.user_id}`.toLowerCase().includes(memberSearch.toLowerCase()));
+
   async function submit(e: FormEvent) {
-    e.preventDefault(); if (!title.trim() || !body.trim()) return;
-    if (!window.confirm('Send this announcement to every non-deleted member?')) return;
+    e.preventDefault(); if (!title.trim() || !body.trim() || (audience === 'single' && !recipient)) return;
+    const recipientName = audience === 'all' ? 'all non-deleted members' : members.find(m => m.user_id === recipient)?.display_name || 'the selected member';
+    if (!window.confirm(`Send this notification to ${recipientName}? It will disappear from the notification centre after 7 days.`)) return;
     setBusy(true); setFeedback('');
-    const { data, error } = await supabase.rpc('admin_broadcast_announcement', { p_title: title.trim(), p_body: body.trim(), p_action_path: path.trim() || null });
-    setBusy(false); setFeedback(error ? error.message : `Announcement delivered to ${Number(data) || 0} member accounts.`);
-    if (!error) { setTitle(''); setBody(''); setPath(''); }
+    const { data, error } = await supabase.rpc('admin_send_notification', {
+      p_recipient_user_id: audience === 'all' ? null : recipient,
+      p_title: title.trim(), p_body: body.trim(), p_action_path: path.trim() || null,
+    });
+    setBusy(false);
+    setFeedback(error ? error.message : `Notification sent to ${Number(data) || 0} member account(s). It expires after 7 days.`);
+    if (!error) { setTitle(''); setBody(''); setPath(''); if (audience === 'single') setRecipient(''); }
   }
-  return <><Heading title="Notifications & Announcements" description="Send an announcement through the existing notifications system. The server records the broadcast and deduplicates recipients." /><form className={`${panel} max-w-2xl space-y-4`} onSubmit={submit}><label className="block text-sm font-semibold">Title<input className={`${field} mt-1`} maxLength={120} value={title} onChange={e => setTitle(e.target.value)} required /></label><label className="block text-sm font-semibold">Message<textarea className={`${field} mt-1 min-h-32`} maxLength={1000} value={body} onChange={e => setBody(e.target.value)} required /></label><label className="block text-sm font-semibold">Optional in-app destination<input className={`${field} mt-1`} placeholder="/discover" value={path} onChange={e => setPath(e.target.value)} /></label><p className="text-xs text-slate-500">This sends to all non-deleted member profiles. Test content carefully before sending; a broadcast cannot be recalled.</p><button className={btn} disabled={busy || !title.trim() || !body.trim()}><Send className="mr-2 inline" size={15} />{busy ? 'Sending…' : 'Send announcement'}</button>{feedback && <p role="status" className="text-sm">{feedback}</p>}</form></>;
+
+  return <><Heading title="Notifications" description="Send a personal notification to one member or an announcement to all members. Notifications automatically disappear from the in-app centre after seven days." />
+    <form className={`${panel} max-w-2xl space-y-4`} onSubmit={submit}>
+      <fieldset><legend className="mb-2 text-sm font-semibold">Send notification to</legend><div className="flex flex-wrap gap-3">
+        <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"><input type="radio" name="audience" checked={audience === 'all'} onChange={() => setAudience('all')} /> All users</label>
+        <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"><input type="radio" name="audience" checked={audience === 'single'} onChange={() => setAudience('single')} /> Selected user</label>
+      </div></fieldset>
+      {audience === 'single' && <div className="space-y-2"><label className="block text-sm font-semibold">Find member<input className={`${field} mt-1`} placeholder="Search name, city or user ID" value={memberSearch} onChange={e => setMemberSearch(e.target.value)} /></label><label className="block text-sm font-semibold">Select recipient<select className={`${field} mt-1`} value={recipient} onChange={e => setRecipient(e.target.value)} required><option value="">Choose a member…</option>{filteredMembers.map(member => <option key={member.user_id} value={member.user_id}>{member.display_name} · {member.city || 'No city'} · {member.user_id.slice(0, 8)}</option>)}</select></label>{membersLoading && <p className="text-xs text-slate-500">Loading registered members…</p>}<ErrorText error={membersError} />{!membersLoading && !membersError && filteredMembers.length === 0 && <p className="text-xs text-slate-500">No matching members.</p>}</div>}
+      <label className="block text-sm font-semibold">Title<input className={`${field} mt-1`} maxLength={120} value={title} onChange={e => setTitle(e.target.value)} required /></label>
+      <label className="block text-sm font-semibold">Message<textarea className={`${field} mt-1 min-h-32`} maxLength={1000} value={body} onChange={e => setBody(e.target.value)} required /></label>
+      <label className="block text-sm font-semibold">Optional in-app destination<input className={`${field} mt-1`} placeholder="/discover" value={path} onChange={e => setPath(e.target.value)} /></label>
+      <p className="rounded-xl bg-blue-50 p-3 text-xs text-blue-800">Notifications are visible for seven days from the sending time, then automatically hidden from the user's notification centre. Existing likes, matches and message notifications continue to work.</p>
+      <button className={btn} disabled={busy || !title.trim() || !body.trim() || (audience === 'single' && (!recipient || membersLoading))}><Send className="mr-2 inline" size={15} />{busy ? 'Sending…' : audience === 'all' ? 'Send to all users' : 'Send personal notification'}</button>
+      {feedback && <p role="status" className="text-sm">{feedback}</p>}
+    </form></>;
 }
 
 export function AdminHealth() {

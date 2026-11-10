@@ -904,6 +904,10 @@ export function ConversationView({
           </p>
         )}
 
+        {!text.trim() && <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+          {['Hey! How has your day been?', 'What are you listening to lately?', 'Would you be up for coffee sometime?'].map((reply, index) => <button key={index} type="button" onClick={() => { setText(reply); textarea.current?.focus(); }} className="shrink-0 rounded-full border border-slate-700 bg-[#0b1220] px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-blue-500 hover:text-white">{index === 0 ? '👋 Say hello' : index === 1 ? '🎧 Music' : '☕ Plan a date'}</button>)}
+        </div>}
+
         <form
           onSubmit={submit}
           className="flex w-full items-center gap-2.5"

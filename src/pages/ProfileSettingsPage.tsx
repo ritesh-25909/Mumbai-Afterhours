@@ -678,6 +678,14 @@ export default function ProfileSettingsPage() {
   // MAIN UI
   // ====================================================
 
+  const completionFields = [
+    Boolean(b.display_name.trim()), Boolean(b.bio.trim()), Boolean(b.neighbourhood.trim()),
+    Boolean(b.height?.trim()), Boolean(b.occupation?.trim()), Boolean(b.college?.trim()),
+    Boolean(b.education_status?.trim()), Boolean(b.interests.trim()), Boolean(b.languages.trim()),
+    Boolean(b.relationship_intention.trim()), Boolean(profile.profile_prompts?.length),
+  ];
+  const completionPercent = Math.round((completionFields.filter(Boolean).length / completionFields.length) * 100);
+
   return (
     <div className="grid gap-6 md:grid-cols-2">
 
@@ -735,6 +743,12 @@ export default function ProfileSettingsPage() {
               </>
             )}
           </div>
+        </div>
+
+        <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-4">
+          <div className="flex items-center justify-between gap-3"><span className="text-sm font-bold text-slate-800">Profile strength</span><span className="text-sm font-extrabold text-blue-700">{completionPercent}%</span></div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-gradient-to-r from-blue-600 to-sky-400 transition-all" style={{ width: `${completionPercent}%` }} /></div>
+          <p className="mt-2 text-xs text-slate-600">Add your interests, bio and dating prompts to help people understand the real you.</p>
         </div>
 
         <p className="mb-4 text-sm">

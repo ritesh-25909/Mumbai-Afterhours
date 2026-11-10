@@ -32,3 +32,11 @@ Deploy the frontend after the database migration is applied.
 - Unit tests could not run from the supplied archive because its `node_modules/.bin` scripts are not executable in this environment.
 - The Supabase migration and live two-account referral / Realtime behavior have not been executed against your hosted Supabase project. Apply the migration and run the two-account test before treating referral credits or the incoming-like badge as production-verified.
 - This package does not add phone-number collection or claim that phone numbers are verified; that needs a deliberate consent flow and a real supported storage/verification design. It also does not claim to have completed an application-wide Discover/Onboarding/Messages performance audit.
+
+## Admin notifications: personal targeting and seven-day expiry
+
+- Admin → Notifications now supports sending an announcement to all non-deleted members or to one selected member.
+- Member selection is loaded through the existing protected `admin_list_members` RPC.
+- `admin_send_notification` performs the admin authorization check server-side and records the action in `admin_audit_logs`.
+- Notifications receive an `expires_at` timestamp seven days after creation. The existing `list_notifications` RPC excludes expired rows, so they disappear from the in-app notification centre automatically. Rows remain in the database for audit/history; this is not a physical-delete policy.
+- Apply the new migration `supabase/migrations/20261110000002_admin_targeted_notifications_expiry.sql` before deploying the frontend.

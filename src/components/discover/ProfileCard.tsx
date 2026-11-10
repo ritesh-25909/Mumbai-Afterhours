@@ -40,6 +40,9 @@ export function ProfileCard({
   onPass,
   distanceKm,
   likeDisabled = false,
+  compatibilityScore = 0,
+  sharedInterests = [],
+  dailyPick = false,
 }: {
   c: Candidate;
   busy: boolean;
@@ -47,6 +50,9 @@ export function ProfileCard({
   onPass: () => void;
   distanceKm?: number | null;
   likeDisabled?: boolean;
+  compatibilityScore?: number;
+  sharedInterests?: string[];
+  dailyPick?: boolean;
 }) {
   const candidate = c as ExtendedCandidate;
 
@@ -153,6 +159,19 @@ export function ProfileCard({
         className="relative select-none space-y-5"
         aria-label={`${candidate.display_name}, ${candidate.age}`}
       >
+        {/* PERSONALIZED CONNECTION INSIGHTS */}
+        <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-700">Your connection snapshot</p>
+              <p className="mt-1 text-sm font-bold text-slate-900">{compatibilityScore >= 70 ? 'Strong shared signals' : compatibilityScore >= 40 ? 'Some promising overlap' : 'A chance to discover something new'}</p>
+            </div>
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border-4 border-blue-200 bg-white text-lg font-black text-blue-700" aria-label={`Shared profile signals ${compatibilityScore} out of 99`}>{compatibilityScore}%</div>
+          </div>
+          {dailyPick && <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-blue-700 px-3 py-1 text-xs font-bold text-white"><Sparkles className="h-3 w-3" /> Top pick in this stack</p>}
+          {sharedInterests.length > 0 && <div className="mt-3"><p className="text-xs font-bold text-slate-600">Common ground</p><div className="mt-2 flex flex-wrap gap-2">{sharedInterests.slice(0, 5).map(item => <span key={item} className="rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800">{item}</span>)}</div></div>}
+        </section>
+
         {/* MAIN PHOTO CARD */}
         <section className="overflow-hidden rounded-[28px] border border-line/70 bg-white shadow-card">
           {photoPrompts[0]?.trim() && (
@@ -445,6 +464,13 @@ export function ProfileCard({
           >
             Add a personal comment <span className="font-normal text-slate2">(optional)</span>
           </label>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {[
+              candidate.interests?.[0] ? `I noticed you’re into ${candidate.interests[0]} — how did you get started?` : 'What does your ideal weekend look like?',
+              candidate.neighbourhood ? `What’s your favourite hidden spot around ${candidate.neighbourhood}?` : 'What’s your favourite place in Mumbai?',
+              'What’s one thing you could talk about for hours?',
+            ].map((suggestion, index) => <button key={index} type="button" onClick={() => setComment(suggestion.slice(0, 300))} className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-left text-xs font-medium text-blue-800 hover:bg-blue-100">{index === 0 ? 'Shared interest' : index === 1 ? 'Mumbai question' : 'Conversation starter'}</button>)}
+          </div>
           <textarea
             id={`like-comment-${candidate.id}`}
             value={comment}

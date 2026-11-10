@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { BadgeCheck, SlidersHorizontal, Sparkles, X } from 'lucide-react';
 
 import { useAuth } from '../features/auth/AuthProvider';
 import { supabase } from '../lib/supabase';
@@ -45,6 +46,10 @@ export default function DiscoverPage() {
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [matched, setMatched] = useState<Candidate | null>(null);
   const [credits, setCredits] = useState<LikeCreditSummary | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [sharedOnly, setSharedOnly] = useState(false);
+  const [maxDistance, setMaxDistance] = useState<'any' | '10' | '25' | '50'>('any');
 
   const [myLocation, setMyLocation] =
     useState<Coordinates | null>(null);
@@ -171,32 +176,42 @@ export default function DiscoverPage() {
   }, [queue.length, loading, exhausted, load]);
 
   // =====================================================
-  // CURRENT CANDIDATE
+  // CURRENT CANDIDATE + CLIENT-SIDE DISCOVERY REFINEMENTS
+  // These filters only refine profiles already returned by the existing
+  // discover_profiles RPC. They do not change server rules or preferences.
   // =====================================================
 
-  const current = queue[0];
+  const ownInterests = (profile?.interests ?? []).map(value => value.trim().toLowerCase()).filter(Boolean);
+  const candidateDistance = (candidate: Candidate): number | null => {
+    if (!effectiveLocation) return null;
+    const point = getNeighbourhoodCoordinates(candidate.neighbourhood);
+    return point ? getDistanceKm(effectiveLocation, point) : null;
+  };
+  const sharedFor = (candidate: Candidate) => (candidate.interests ?? []).filter(value => ownInterests.includes(value.trim().toLowerCase()));
+  const scoreFor = (candidate: Candidate) => {
+    const theirs = (candidate.interests ?? []).filter(Boolean);
+    const shared = sharedFor(candidate).length;
+    const interestScore = theirs.length ? Math.round((shared / Math.max(ownInterests.length, theirs.length, 1)) * 65) : 0;
+    const candidateLanguages = (candidate.languages ?? []).map(value => value.toLowerCase());
+    const myLanguages = (profile?.languages ?? []).map(value => value.toLowerCase());
+    const languageScore = candidateLanguages.some(value => myLanguages.includes(value)) ? 15 : 0;
+    const intentionScore = candidate.relationship_intention && candidate.relationship_intention === profile?.relationship_intention ? 20 : 0;
+    return Math.min(99, interestScore + languageScore + intentionScore);
+  };
+  const visibleQueue = queue
+    .filter(candidate => !verifiedOnly || candidate.verified)
+    .filter(candidate => !sharedOnly || sharedFor(candidate).length > 0)
+    .filter(candidate => {
+      if (maxDistance === 'any') return true;
+      const distance = candidateDistance(candidate);
+      return distance !== null && distance <= Number(maxDistance);
+    })
+    .sort((a, b) => scoreFor(b) - scoreFor(a));
+  const current = visibleQueue[0];
 
-  const distanceForCurrent: CandidateWithDistance | null =
-    current
-      ? {
-          ...current,
-          distanceKm: (() => {
-            if (!effectiveLocation) return null;
-
-            const candidateLocation =
-              getNeighbourhoodCoordinates(
-                current.neighbourhood
-              );
-
-            if (!candidateLocation) return null;
-
-            return getDistanceKm(
-              effectiveLocation,
-              candidateLocation
-            );
-          })(),
-        }
-      : null;
+  const distanceForCurrent: CandidateWithDistance | null = current
+    ? { ...current, distanceKm: candidateDistance(current) }
+    : null;
 
   // =====================================================
   // ADVANCE TO NEXT PROFILE
@@ -205,9 +220,8 @@ export default function DiscoverPage() {
   const advance = () => {
     if (current) {
       handled.current.add(current.id);
+      setQueue(q => q.filter(item => item.id !== current.id));
     }
-
-    setQueue((q) => q.slice(1));
   };
 
   // =====================================================
@@ -277,6 +291,20 @@ export default function DiscoverPage() {
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
 
+      {/* DISCOVER REFINEMENTS */}
+      <section className="overflow-hidden rounded-2xl border border-blue-100 bg-white shadow-sm">
+        <button type="button" onClick={() => setFiltersOpen(value => !value)} className="flex w-full items-center justify-between px-4 py-3 text-left">
+          <span className="flex items-center gap-2 text-sm font-bold text-slate-900"><SlidersHorizontal className="h-4 w-4 text-blue-700" /> Refine your Discover</span>
+          <span className="text-xs font-semibold text-blue-700">{filtersOpen ? 'Hide filters' : 'Filters'}</span>
+        </button>
+        {filtersOpen && <div className="space-y-3 border-t border-slate-100 px-4 py-4">
+          <label className="flex items-center justify-between gap-3 text-sm text-slate-700"><span className="flex items-center gap-2"><BadgeCheck className="h-4 w-4 text-blue-600" /> Verified profiles only</span><input type="checkbox" checked={verifiedOnly} onChange={event => setVerifiedOnly(event.target.checked)} className="h-4 w-4 accent-blue-600" /></label>
+          <label className="flex items-center justify-between gap-3 text-sm text-slate-700"><span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-blue-600" /> People sharing my interests</span><input type="checkbox" checked={sharedOnly} onChange={event => setSharedOnly(event.target.checked)} className="h-4 w-4 accent-blue-600" /></label>
+          <label className="flex items-center justify-between gap-3 text-sm text-slate-700"><span>Approximate distance</span><select value={maxDistance} onChange={event => setMaxDistance(event.target.value as typeof maxDistance)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="any">Any distance</option><option value="10">Within 10 km</option><option value="25">Within 25 km</option><option value="50">Within 50 km</option></select></label>
+          <div className="flex items-center justify-between border-t border-slate-100 pt-3"><span className="text-xs text-slate-500">Filters apply to loaded profiles only. Your saved preferences remain unchanged.</span><button type="button" onClick={() => { setVerifiedOnly(false); setSharedOnly(false); setMaxDistance('any'); }} className="inline-flex shrink-0 items-center gap-1 text-xs font-bold text-blue-700"><X className="h-3 w-3" /> Clear</button></div>
+        </div>}
+      </section>
+
       {/* LIKE CREDIT BALANCES */}
       {credits && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-white px-4 py-3 shadow-sm">
@@ -344,6 +372,9 @@ export default function DiscoverPage() {
             key={current.id}
             c={distanceForCurrent}
             distanceKm={distanceForCurrent.distanceKm}
+            compatibilityScore={scoreFor(current)}
+            sharedInterests={sharedFor(current)}
+            dailyPick={visibleQueue[0]?.id === current.id && visibleQueue.length > 1 && scoreFor(current) >= 45}
             busy={busy}
             likeDisabled={!!credits && credits.daily_free_remaining === 0 && credits.referral_bonus_credits === 0}
             onLike={(comment) => act('like', comment)}
@@ -359,6 +390,14 @@ export default function DiscoverPage() {
           />
         </>
       ) : (
+        !err && queue.length > 0 && (verifiedOnly || sharedOnly || maxDistance !== 'any') ? (
+          <div className="rounded-2xl border border-blue-100 bg-white p-7 text-center shadow-sm">
+            <Sparkles className="mx-auto h-8 w-8 text-blue-600" />
+            <h2 className="mt-3 font-bold text-slate-900">No profiles match these filters</h2>
+            <p className="mt-1 text-sm text-slate-500">Try widening your distance or turning off a filter.</p>
+            <button type="button" onClick={() => { setVerifiedOnly(false); setSharedOnly(false); setMaxDistance('any'); }} className="btn-primary mt-4">Clear filters</button>
+          </div>
+        ) : (
         !err && (
           <div
             className="
@@ -398,6 +437,7 @@ export default function DiscoverPage() {
               </span>
             </button>
           </div>
+        )
         )
       )}
 
