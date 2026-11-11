@@ -23,10 +23,7 @@ import {
  * Example: 1 GiB = 1073741824 bytes.
  * This is an example only, not an assumed plan limit.
  */
-const STORAGE_QUOTA_BYTES = Number(
-  import.meta.env.VITE_SUPABASE_STORAGE_QUOTA_BYTES || 0
-);
-
+const STORAGE_QUOTA_BYTES = 1_073_741_824; // Supabase Free: 1 GB
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
 
