@@ -1,13 +1,15 @@
 
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import {
+  createBrowserRouter,
+  Navigate,
+  Outlet,
+} from 'react-router-dom';
 
 import LandingPage from '../pages/LandingPage';
 import AuthPage from '../pages/AuthPage';
 import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 import { RequireProfile } from '../features/profiles/RequireProfile';
-import { RequireMobileNumber } from '../features/profiles/RequireMobileNumber';
-import CompletePhonePage from '../pages/CompletePhonePage';
-import AdminStoragePage from '../admin/pages/AdminStoragePage';
 import { AppShell } from '../components/layout/AppShell';
 import { useAuth } from '../features/auth/AuthProvider';
 
@@ -27,10 +29,9 @@ import DeleteAccountPage from '../pages/DeleteAccountPage';
 import ModerationReportsPage from '../pages/ModerationReportsPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
 import EmailVerificationPage from '../pages/EmailVerificationPage';
-import { AdminGuard } from '../admin/AdminGuard';
-import { AdminLayout } from '../admin/components/AdminLayout';
-import AdminDashboard from '../admin/pages/AdminDashboard';
-import {AdminUsers,AdminRoles,AdminCurated,AdminAudit,AdminRiskQueue,AdminAnnouncements,AdminHealth,AdminExport} from '../admin/pages/AdminOperations';
+import AdminDashboardPage from '../pages/AdminDashboardPage';
+
+import { myRoles } from '../features/verification/api';
 
 import {
   SafetyPage,
@@ -51,6 +52,97 @@ function LandingRoute() {
   }
 
   return <LandingPage />;
+}
+
+/* =====================================================
+   ADMIN AUTHORIZATION
+===================================================== */
+
+function AdminRoute() {
+  const { session } = useAuth();
+
+  const [checking, setChecking] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAdminAccess() {
+      setChecking(true);
+      setAuthorized(false);
+      setError(null);
+
+      try {
+        const roles = await myRoles();
+
+        if (cancelled) return;
+
+        const hasAdminAccess =
+          roles.includes('admin') ||
+          roles.includes('moderator');
+
+        setAuthorized(hasAdminAccess);
+      } catch (err) {
+        if (cancelled) return;
+
+        console.error('Admin authorization failed:', err);
+
+        setError(
+          'Could not verify administrator permissions. Please retry.'
+        );
+      } finally {
+        if (!cancelled) {
+          setChecking(false);
+        }
+      }
+    }
+
+    if (session?.user?.id) {
+      void checkAdminAccess();
+    } else {
+      setChecking(false);
+      setAuthorized(false);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
+
+  if (checking) {
+    return (
+      <div className="grid min-h-[60vh] place-items-center">
+        <p className="text-sm font-semibold text-slate-500">
+          Verifying administrator access...
+        </p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto mt-12 max-w-lg rounded-2xl border border-rose-200 bg-white p-6 text-center">
+        <p className="text-sm text-rose-700" role="alert">
+          {error}
+        </p>
+
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-xl bg-[#174fc5] px-5 py-2.5 font-semibold text-white"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!authorized) {
+    return <Navigate to="/discover" replace />;
+  }
+
+  return <Outlet />;
 }
 
 /* =====================================================
@@ -102,62 +194,82 @@ export const router = createBrowserRouter(
       element: <ProtectedRoute />,
       children: [
         {
-          element: <RequireMobileNumber />,
-          children: [
-            { path: '/complete-phone', element: <CompletePhonePage /> },
-            {
-              path: '/admin',
-              element: <AdminGuard><AdminLayout /></AdminGuard>,
-              children: [
-                { index: true, element: <AdminDashboard /> },
-                { path: 'moderation', element: <ModerationPage /> },
-                { path: 'reports', element: <ModerationReportsPage /> },
-                { path: 'users', element: <AdminUsers /> },
-                { path: 'permissions', element: <AdminRoles /> },
-                { path: 'recommendations', element: <AdminCurated /> },
-                { path: 'audit', element: <AdminAudit /> },
-                { path: 'risk-review', element: <AdminRiskQueue /> },
-                { path: 'announcements', element: <AdminAnnouncements /> },
-                { path: 'exports', element: <AdminExport /> },
-                { path: 'health', element: <AdminHealth /> },
-                { path: 'storage', element: <AdminStoragePage /> },
-                { path: 'engagement', element: <Navigate to="/admin" replace /> },
-                { path: 'analytics', element: <Navigate to="/admin" replace /> },
-                { path: 'moderation-center', element: <Navigate to="/admin/reports" replace /> },
-                { path: 'admin-users', element: <Navigate to="/admin/permissions" replace /> },
-                { path: 'settings', element: <Navigate to="/admin/health" replace /> },
-              ],
-            },
-            {
-              path: '/onboarding',
-              element: <OnboardingPage />,
-            },
-            {
-              path: '/delete-account',
-              element: <DeleteAccountPage />,
-            },
+          path: '/onboarding',
+          element: <OnboardingPage />,
+        },
+        {
+          path: '/delete-account',
+          element: <DeleteAccountPage />,
+        },
 
-            // PROFILE PROTECTION
+        // PROFILE PROTECTION
+        {
+          element: <RequireProfile />,
+          children: [
             {
-              element: <RequireProfile />,
+              element: <AppShell />,
               children: [
                 {
-                  element: <AppShell />,
+                  path: '/discover',
+                  element: <DiscoverPage />,
+                },
+                {
+                  path: '/matches',
+                  element: <MatchesPage />,
+                },
+                {
+                  path: '/inbox',
+                  element: <ChatPage />,
+                },
+                {
+                  path: '/chat/:id',
+                  element: <ChatPage />,
+                },
+                {
+                  path: '/user/:userId',
+                  element: <UserProfilePage />,
+                },
+                {
+                  path: '/profile',
+                  element: <ProfileSettingsPage />,
+                },
+                {
+                  path: '/verify',
+                  element: <SelfieVerificationPage />,
+                },
+                {
+                  path: '/moderation',
+                  element: <ModerationPage />,
+                },
+                {
+                  path: '/moderation/reports',
+                  element: <ModerationReportsPage />,
+                },
+                {
+                  path: '/settings',
+                  element: <AccountSettingsPage />,
+                },
+                {
+                  path: '/subscription',
+                  element: <SubscriptionPage />,
+                },
+                {
+                  path: '/referrals',
+                  element: <ReferralPage />,
+                },
+                {
+                  path: '/settings/privacy',
+                  element: <PrivacySettingsPage />,
+                },
+
+                // ADMIN COMMAND CENTER
+                {
+                  element: <AdminRoute />,
                   children: [
-                    { path: '/discover', element: <DiscoverPage /> },
-                    { path: '/matches', element: <MatchesPage /> },
-                    { path: '/inbox', element: <ChatPage /> },
-                    { path: '/chat/:id', element: <ChatPage /> },
-                    { path: '/user/:userId', element: <UserProfilePage /> },
-                    { path: '/profile', element: <ProfileSettingsPage /> },
-                    { path: '/verify', element: <SelfieVerificationPage /> },
-                    { path: '/moderation', element: <ModerationPage /> },
-                    { path: '/moderation/reports', element: <ModerationReportsPage /> },
-                    { path: '/settings', element: <AccountSettingsPage /> },
-                    { path: '/subscription', element: <SubscriptionPage /> },
-                    { path: '/settings/referrals', element: <ReferralPage /> },
-                    { path: '/referrals', element: <Navigate to="/settings/referrals" replace /> },
-                    { path: '/settings/privacy', element: <PrivacySettingsPage /> },
+                    {
+                      path: '/admin',
+                      element: <AdminDashboardPage />,
+                    },
                   ],
                 },
               ],
