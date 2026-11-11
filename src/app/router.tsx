@@ -1,18 +1,18 @@
 
-import { useEffect, useState } from 'react';
+import { useAuth } from '../features/auth/AuthProvider';
 import {
   createBrowserRouter,
   Navigate,
-  Outlet,
 } from 'react-router-dom';
 
 import LandingPage from '../pages/LandingPage';
 import AuthPage from '../pages/AuthPage';
+
 import { ProtectedRoute } from '../features/auth/ProtectedRoute';
 import { RequireProfile } from '../features/profiles/RequireProfile';
 import { AppShell } from '../components/layout/AppShell';
-import { useAuth } from '../features/auth/AuthProvider';
 
+// Existing website pages
 import OnboardingPage from '../pages/OnboardingPage';
 import ProfileSettingsPage from '../pages/ProfileSettingsPage';
 import UserProfilePage from '../pages/UserProfilePage';
@@ -30,17 +30,32 @@ import ModerationReportsPage from '../pages/ModerationReportsPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
 import EmailVerificationPage from '../pages/EmailVerificationPage';
 
-// Existing Admin Command Center dashboard
-import AdminDashboard from '../admin/pages/AdminDashboard';
-
-import { myRoles } from '../features/verification/api';
-
+// Existing legal pages
 import {
   SafetyPage,
   TermsPage,
   PrivacyPage,
   HelpPage,
 } from '../pages/LegalPages';
+
+// Existing Admin protection and layout
+import { AdminGuard } from '../admin/AdminGuard';
+import { AdminLayout } from '../admin/components/AdminLayout';
+
+// Existing Admin pages
+import AdminDashboard from '../admin/pages/AdminDashboard';
+import AdminStoragePage from '../admin/pages/AdminStoragePage';
+
+import {
+  AdminUsers,
+  AdminRoles,
+  AdminCurated,
+  AdminAudit,
+  AdminRiskQueue,
+  AdminAnnouncements,
+  AdminHealth,
+  AdminExport,
+} from '../admin/pages/AdminOperations';
 
 /* =====================================================
    PUBLIC LANDING REDIRECT
@@ -54,98 +69,6 @@ function LandingRoute() {
   }
 
   return <LandingPage />;
-}
-
-/* =====================================================
-   ADMIN AUTHORIZATION
-===================================================== */
-
-function AdminRoute() {
-  const { session } = useAuth();
-
-  const [checking, setChecking] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function checkAdminAccess() {
-      setChecking(true);
-      setAuthorized(false);
-      setError(null);
-
-      try {
-        const roles = await myRoles();
-
-        if (cancelled) return;
-
-        const hasAdminAccess =
-          roles.includes('admin') ||
-          roles.includes('super_admin') ||
-          roles.includes('moderator');
-
-        setAuthorized(hasAdminAccess);
-      } catch (err) {
-        if (cancelled) return;
-
-        console.error('Admin authorization failed:', err);
-
-        setError(
-          'Could not verify administrator permissions. Please retry.'
-        );
-      } finally {
-        if (!cancelled) {
-          setChecking(false);
-        }
-      }
-    }
-
-    if (session?.user?.id) {
-      void checkAdminAccess();
-    } else {
-      setChecking(false);
-      setAuthorized(false);
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.user?.id]);
-
-  if (checking) {
-    return (
-      <div className="grid min-h-[60vh] place-items-center">
-        <p className="text-sm font-semibold text-slate-500">
-          Verifying administrator access...
-        </p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="mx-auto mt-12 max-w-lg rounded-2xl border border-rose-200 bg-white p-6 text-center">
-        <p className="text-sm text-rose-700" role="alert">
-          {error}
-        </p>
-
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-4 rounded-xl bg-[#174fc5] px-5 py-2.5 font-semibold text-white"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  if (!authorized) {
-    return <Navigate to="/discover" replace />;
-  }
-
-  return <Outlet />;
 }
 
 /* =====================================================
@@ -203,6 +126,68 @@ export const router = createBrowserRouter(
         {
           path: '/delete-account',
           element: <DeleteAccountPage />,
+        },
+
+        // ADMIN COMMAND CENTER
+        // Protected by existing AdminGuard.
+        // Does not require a completed public profile.
+        {
+          path: '/admin',
+          element: (
+            <AdminGuard>
+              <AdminLayout />
+            </AdminGuard>
+          ),
+          children: [
+            {
+              index: true,
+              element: <AdminDashboard />,
+            },
+            {
+              path: 'users',
+              element: <AdminUsers />,
+            },
+            {
+              path: 'permissions',
+              element: <AdminRoles />,
+            },
+            {
+              path: 'moderation',
+              element: <ModerationPage />,
+            },
+            {
+              path: 'reports',
+              element: <ModerationReportsPage />,
+            },
+            {
+              path: 'recommendations',
+              element: <AdminCurated />,
+            },
+            {
+              path: 'audit',
+              element: <AdminAudit />,
+            },
+            {
+              path: 'risk-review',
+              element: <AdminRiskQueue />,
+            },
+            {
+              path: 'announcements',
+              element: <AdminAnnouncements />,
+            },
+            {
+              path: 'exports',
+              element: <AdminExport />,
+            },
+            {
+              path: 'health',
+              element: <AdminHealth />,
+            },
+            {
+              path: 'storage',
+              element: <AdminStoragePage />,
+            },
+          ],
         },
 
         // PROFILE PROTECTION
@@ -263,17 +248,6 @@ export const router = createBrowserRouter(
                 {
                   path: '/settings/privacy',
                   element: <PrivacySettingsPage />,
-                },
-
-                // ADMIN COMMAND CENTER
-                {
-                  element: <AdminRoute />,
-                  children: [
-                    {
-                      path: '/admin',
-                      element: <AdminDashboard />,
-                    },
-                  ],
                 },
               ],
             },
