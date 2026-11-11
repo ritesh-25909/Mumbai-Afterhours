@@ -308,8 +308,10 @@ export default function PrivacySettingsPage() {
             </span>
 
             <span className="mt-1 block text-sm text-slate2">
-              Hidden profiles do not appear in Discover.
-              Existing matches can still message you.
+              {hidden
+                ? 'Your profile is currently hidden from other members’ Discover results. Existing matches can still message you.'
+                : 'Your profile is currently visible to eligible members in Discover. Turn this on to pause discovery without deleting your account.'}
+              {' '}Click Save Changes below to apply this setting.
             </span>
           </span>
         </label>
