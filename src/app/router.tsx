@@ -29,7 +29,9 @@ import DeleteAccountPage from '../pages/DeleteAccountPage';
 import ModerationReportsPage from '../pages/ModerationReportsPage';
 import ResetPasswordPage from '../pages/ResetPasswordPage';
 import EmailVerificationPage from '../pages/EmailVerificationPage';
-import AdminDashboardPage from '../pages/AdminDashboardPage';
+
+// Existing Admin Command Center dashboard
+import AdminDashboard from '../admin/pages/AdminDashboard';
 
 import { myRoles } from '../features/verification/api';
 
@@ -80,6 +82,7 @@ function AdminRoute() {
 
         const hasAdminAccess =
           roles.includes('admin') ||
+          roles.includes('super_admin') ||
           roles.includes('moderator');
 
         setAuthorized(hasAdminAccess);
@@ -268,7 +271,7 @@ export const router = createBrowserRouter(
                   children: [
                     {
                       path: '/admin',
-                      element: <AdminDashboardPage />,
+                      element: <AdminDashboard />,
                     },
                   ],
                 },
