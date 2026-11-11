@@ -9,22 +9,47 @@ export function AdminGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
+
     const verify = async () => {
       try {
         const roles = await myRoles();
-        const allowed = roles.includes('admin') || roles.includes('super_admin');
-        if (active) setStatus(allowed ? 'allowed' : 'denied');
+
+        const allowed =
+          roles.includes('admin') ||
+          roles.includes('super_admin') ||
+          roles.includes('moderator');
+
+        if (active) {
+          setStatus(allowed ? 'allowed' : 'denied');
+        }
       } catch {
-        if (active) setStatus('denied');
+        if (active) {
+          setStatus('denied');
+        }
       }
     };
+
     void verify();
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (status === 'checking') {
-    return <div className="min-h-[45vh] p-8 text-slate2" role="status">Verifying administrator access…</div>;
+    return (
+      <div
+        className="min-h-[45vh] p-8 text-slate2"
+        role="status"
+      >
+        Verifying staff access…
+      </div>
+    );
   }
-  if (status === 'denied') return <Navigate to="/discover" replace />;
+
+  if (status === 'denied') {
+    return <Navigate to="/discover" replace />;
+  }
+
   return <>{children}</>;
 }
