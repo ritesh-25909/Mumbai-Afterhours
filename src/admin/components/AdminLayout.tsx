@@ -1,11 +1,11 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
-import { LayoutDashboard, ShieldCheck, Flag, ArrowLeft, LogOut, Menu, X, UserRound, KeyRound, Sparkles, ScrollText, Megaphone, AlertTriangle, Download, HeartPulse, HardDrive } from 'lucide-react';
+import { LayoutDashboard, ShieldCheck, Flag, ArrowLeft, LogOut, Menu, X, UserRound, KeyRound, Sparkles, ScrollText, Megaphone, AlertTriangle, Download, HardDrive } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../features/auth/AuthProvider';
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/admin/users', label: 'Users', icon: UserRound },
+  { to: '/admin/users', label: 'All Users', icon: UserRound },
   { to: '/admin/permissions', label: 'User permissions', icon: KeyRound },
   { to: '/admin/moderation', label: 'Verification review', icon: ShieldCheck },
   { to: '/admin/reports', label: 'User reports', icon: Flag },
@@ -14,7 +14,6 @@ const navItems = [
   { to: '/admin/risk-review', label: 'Risk review', icon: AlertTriangle },
   { to: '/admin/announcements', label: 'Notifications', icon: Megaphone },
   { to: '/admin/exports', label: 'Data export', icon: Download },
-  { to: '/admin/health', label: 'Platform health', icon: HeartPulse },
   { to: '/admin/storage', label: 'Storage usage', icon: HardDrive },
 ];
 
