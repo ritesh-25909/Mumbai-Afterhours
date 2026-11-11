@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Gift } from 'lucide-react';
 
 import { myRoles } from '../../features/verification/api';
 
@@ -56,6 +56,11 @@ export const SettingsNav = () => {
 
       <NavLink to="/settings/privacy" className={cls}>
         Privacy
+      </NavLink>
+
+      <NavLink to="/referrals" className={cls}>
+        <Gift size={17} />
+        Referrals
       </NavLink>
 
       {isAdmin && (
