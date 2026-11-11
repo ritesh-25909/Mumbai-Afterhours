@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Download, RefreshCw, Send, ShieldAlert, Trash2, UserRoundSearch } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { signPhotoPaths } from '../../features/discovery/api';
 
-type User = { user_id: string; display_name: string; email?: string | null; city: string; created_at: string; profile_complete: boolean; verified: boolean; moderation_status: string };
+type User = { user_id: string; display_name: string; gender: string; city: string; created_at: string; profile_complete: boolean; verified: boolean; moderation_status: string; visibility_status: string; admin_hidden: boolean };
+type AdminProfile = { user_id: string; display_name: string; date_of_birth: string; gender: string; city: string; neighbourhood: string | null; bio: string | null; languages: string[]; interests: string[]; relationship_intention: string | null; profile_complete: boolean; verified: boolean; moderation_status: string; visibility_status: string; admin_hidden: boolean; college: string | null; education_status: string | null; height: string | null; occupation: string | null; smoking: string | null; alcohol: string | null; religion: string | null; profile_prompts: unknown; photo_paths: string[]; photo_urls?: string[]; role_names: string[] };
 type Candidate = { id: string; display_name: string; city: string; verified: boolean };
 type CuratedRow = { batch_id: string; status: string; candidate_user_id: string; position: number; display_name: string };
 type Audit = { id: string; admin_user_id: string; target_user_id: string | null; action: string; details: Record<string, unknown>; created_at: string };
@@ -39,8 +41,10 @@ function csvDownload(filename: string, rows: Record<string, unknown>[]) {
 
 export function AdminUsers() {
   const [search, setSearch] = useState(''), [query, setQuery] = useState(''), [page, setPage] = useState(0), [selected, setSelected] = useState<string | null>(null);
-  const { data, error, loading, refresh } = useAdminRpc<User>('admin_list_members', { p_search: query || null, p_limit: 30, p_offset: page * 30 });
+  const { data, error, loading, refresh } = useAdminRpc<User>('admin_list_all_users', { p_search: query || null, p_limit: 30, p_offset: page * 30 });
   const [detail, setDetail] = useState<User360 | null>(null), [detailError, setDetailError] = useState(''), [detailLoading, setDetailLoading] = useState(false);
+  const [profile, setProfile] = useState<AdminProfile | null>(null), [profileError, setProfileError] = useState(''), [profileLoading, setProfileLoading] = useState(false);
+  const [visibilityBusy, setVisibilityBusy] = useState(false), [visibilityMessage, setVisibilityMessage] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false), [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false), [deleteError, setDeleteError] = useState(''), [deleteSuccess, setDeleteSuccess] = useState('');
   const [canDeleteUsers, setCanDeleteUsers] = useState(false);
@@ -69,6 +73,42 @@ export function AdminUsers() {
     })();
     return () => { active = false; };
   }, [selected]);
+
+  useEffect(() => {
+    let active = true;
+    if (!selected) { setProfile(null); setProfileError(''); return; }
+    setProfileLoading(true); setProfileError(''); setVisibilityMessage('');
+    void (async () => {
+      try {
+        const { data: result, error: rpcError } = await supabase.rpc('admin_user_profile', { p_user_id: selected });
+        if (rpcError) throw rpcError;
+        const row = (Array.isArray(result) ? result[0] : result) as AdminProfile | null;
+        if (!row) throw new Error('Profile not found.');
+        const urls = await signPhotoPaths(row.photo_paths ?? []);
+        if (active) setProfile({ ...row, photo_urls: (row.photo_paths ?? []).map(path => urls[path]).filter((url): url is string => Boolean(url)) });
+      } catch (e) {
+        if (active) setProfileError(e instanceof Error ? e.message : 'Could not load full profile.');
+      } finally { if (active) setProfileLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [selected]);
+
+  async function toggleAdminHidden() {
+    if (!selected || !profile || visibilityBusy) return;
+    setVisibilityBusy(true); setVisibilityMessage('');
+    try {
+      const { error: rpcError } = await supabase.rpc('admin_set_profile_hidden', {
+        p_user_id: selected,
+        p_hidden: !profile.admin_hidden,
+      });
+      if (rpcError) throw rpcError;
+      setProfile({ ...profile, admin_hidden: !profile.admin_hidden });
+      setVisibilityMessage(profile.admin_hidden ? 'Profile restored to normal Discover visibility.' : 'Profile hidden from ordinary Discover results. No notification was sent.');
+      await refresh();
+    } catch (e) {
+      setVisibilityMessage(e instanceof Error ? e.message : 'Could not update profile visibility.');
+    } finally { setVisibilityBusy(false); }
+  }
 
   async function deleteSelectedUser() {
     if (!selected || !detail || deleteConfirmation.trim() !== 'DELETE' || deleteBusy) return;
@@ -114,13 +154,32 @@ export function AdminUsers() {
       <section className={panel}>
         <form className="mb-4 flex gap-2" onSubmit={e => { e.preventDefault(); setPage(0); setQuery(search.trim()); }}><input className={field} placeholder="Search name, city or exact user ID" value={search} onChange={e => setSearch(e.target.value)} /><button className={btn}>Search</button></form>
         <ErrorText error={error} />
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="p-3">Member</th><th>City</th><th>Verification</th><th>Moderation</th><th>Joined</th></tr></thead><tbody>{data.map(u => <tr key={u.user_id} className={`cursor-pointer border-b border-slate-100 hover:bg-blue-50 ${selected === u.user_id ? 'bg-blue-50' : ''}`} onClick={() => { setSelected(u.user_id); setDeleteSuccess(''); setDeleteError(''); }}><td className="p-3"><strong>{u.display_name}</strong><div className="text-xs text-slate-400">{u.user_id}</div></td><td>{u.city}</td><td>{u.verified ? 'Verified' : 'Unverified'}</td><td className="capitalize">{u.moderation_status}</td><td>{new Date(u.created_at).toLocaleDateString('en-IN')}</td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b text-slate-500"><th className="p-3">Member</th><th>Gender</th><th>City</th><th>Visibility</th><th>Verification</th><th>Joined</th></tr></thead><tbody>{data.map(u => <tr key={u.user_id} className={`cursor-pointer border-b border-slate-100 hover:bg-blue-50 ${selected === u.user_id ? 'bg-blue-50' : ''}`} onClick={() => { setSelected(u.user_id); setDeleteSuccess(''); setDeleteError(''); }}><td className="p-3"><strong>{u.display_name}</strong><div className="text-xs text-slate-400">{u.user_id}</div></td><td className="capitalize">{u.gender || '—'}</td><td>{u.city}</td><td>{u.admin_hidden ? 'Admin hidden' : u.visibility_status}</td><td>{u.verified ? 'Verified' : 'Unverified'}</td><td>{new Date(u.created_at).toLocaleDateString('en-IN')}</td></tr>)}</tbody></table></div>
         {!loading && !error && data.length === 0 && <p className="p-4 text-sm text-slate-500">No matching members.</p>}
         <div className="mt-4 flex flex-wrap items-center gap-3"><button className={btnLight} disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}>Previous</button><span className="text-sm">Page {page + 1}</span><button className={btnLight} disabled={data.length < 30 || loading} onClick={() => setPage(p => p + 1)}>Next</button><button className="text-sm font-semibold text-blue-700" onClick={() => void refresh()}><RefreshCw className="mr-1 inline" size={14} />Refresh</button></div>
       </section>
       <aside className={panel}><div className="mb-3 flex items-center gap-2"><UserRoundSearch className="text-blue-700" /><h2 className="font-bold">User 360°</h2></div>{deleteSuccess && <p role="status" className="mb-3 rounded-xl bg-green-50 p-3 text-sm text-green-700">{deleteSuccess}</p>}{!selected ? <p className="text-sm text-slate-500">Select a member to inspect their activity.</p> : detailLoading ? <p className="text-sm text-slate-500">Loading member activity…</p> : <><ErrorText error={detailError} />{detail && <><h3 className="text-lg font-bold">{detail.display_name}</h3><p className="break-all text-xs text-slate-400">{detail.user_id}</p><p className="mt-2 text-sm text-slate-600">{detail.city} · Joined {new Date(detail.created_at).toLocaleDateString('en-IN')}</p><div className="mt-4 grid grid-cols-2 gap-2">{[
         ['Likes sent', detail.likes_sent], ['Likes received', detail.likes_received], ['Active matches', detail.active_matches], ['Messages sent', detail.messages_sent], ['Reports received', detail.reports_received], ['Pending verification', detail.pending_verifications], ['Profile complete', detail.profile_complete ? 'Yes' : 'No'],
       ].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 font-bold text-slate-900">{value}</p></div>)}</div><div className="mt-4 border-t pt-3 text-sm"><p>Verification: <strong>{detail.verified ? 'Verified' : 'Not verified'}</strong></p><p>Moderation: <strong className="capitalize">{detail.moderation_status}</strong></p><p>Visibility: <strong>{detail.visibility_status}</strong></p><p>Roles: <strong>{detail.role_names.join(', ') || 'Member'}</strong></p></div>
+        <div className="mt-5 border-t pt-4">
+          <h4 className="mb-3 font-bold text-slate-900">Complete profile</h4>
+          {profileLoading && <p className="text-sm text-slate-500">Loading profile…</p>}
+          <ErrorText error={profileError} />
+          {profile && <div className="space-y-3 text-sm">
+            <div className="flex flex-wrap gap-2">{(profile.photo_urls ?? []).map((url, index) => <img key={`${url}-${index}`} src={url} alt={`${profile.display_name} profile ${index + 1}`} className="h-24 w-24 rounded-xl object-cover" />)}</div>
+            <div className="grid grid-cols-2 gap-2">{[
+              ['Gender', profile.gender], ['Date of birth', profile.date_of_birth], ['Neighbourhood', profile.neighbourhood], ['Relationship intention', profile.relationship_intention], ['Education', profile.education_status], ['College', profile.college], ['Height', profile.height], ['Occupation', profile.occupation], ['Smoking', profile.smoking], ['Alcohol', profile.alcohol], ['Religion', profile.religion], ['Languages', (profile.languages ?? []).join(', ')], ['Interests', (profile.interests ?? []).join(', ')],
+            ].map(([label, value]) => <div key={label} className="rounded-lg bg-slate-50 p-2"><p className="text-xs text-slate-500">{label}</p><p className="font-semibold text-slate-800">{value || '—'}</p></div>)}</div>
+            <div><p className="text-xs text-slate-500">Bio</p><p className="whitespace-pre-wrap">{profile.bio || '—'}</p></div>
+            <div><p className="text-xs text-slate-500">Profile prompts</p><pre className="mt-1 max-h-36 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-2 text-xs">{JSON.stringify(profile.profile_prompts ?? [], null, 2)}</pre></div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <p className="font-semibold text-amber-900">Admin visibility control</p>
+              <p className="mt-1 text-xs text-amber-800">This affects ordinary members' Discover results only. The user is not notified. Their own privacy setting is kept separately.</p>
+              <button type="button" className={`${profile.admin_hidden ? btnLight : btn} mt-3`} disabled={visibilityBusy} onClick={() => void toggleAdminHidden()}>{visibilityBusy ? 'Saving…' : profile.admin_hidden ? 'Restore profile' : 'Hide profile temporarily'}</button>
+              {visibilityMessage && <p role="status" className="mt-2 text-xs text-slate-700">{visibilityMessage}</p>}
+            </div>
+          </div>}
+        </div>
         {canDeleteUsers && <div className="mt-5 border-t pt-4">
           {deleteError && <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{deleteError}</p>}
           <button type="button" className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50" onClick={() => { setDeleteError(''); setDeleteConfirmation(''); setDeleteOpen(true); }}>
@@ -151,7 +210,7 @@ export function AdminUsers() {
 
 export function AdminRoles() {
   const [search, setSearch] = useState(''), [selected, setSelected] = useState<User | null>(null), [roles, setRoles] = useState<string[]>([]), [feedback, setFeedback] = useState(''), [busy, setBusy] = useState(false);
-  const { data, error, refresh } = useAdminRpc<User>('admin_list_members', { p_search: search || null, p_limit: 50, p_offset: 0 });
+  const { data, error, refresh } = useAdminRpc<User>('admin_list_all_users', { p_search: search || null, p_limit: 50, p_offset: 0 });
   useEffect(() => { let active = true; if (!selected) { setRoles([]); return; } void supabase.rpc('admin_list_user_roles', { p_user_id: selected.user_id }).then(({ data: result, error: rpcError }) => { if (!active) return; if (rpcError) setFeedback(rpcError.message); else setRoles((result as string[]) ?? []); }); return () => { active = false; }; }, [selected]);
   async function change(role: 'admin' | 'moderator', enabled: boolean) {
     if (!selected) return;
@@ -166,7 +225,7 @@ export function AdminRoles() {
 
 export function AdminCurated() {
   const [target, setTarget] = useState(''), [user, setUser] = useState<User | null>(null), [selected, setSelected] = useState<string[]>([]), [message, setMessage] = useState(''), [busy, setBusy] = useState(false);
-  const users = useAdminRpc<User>('admin_list_members', { p_search: target || null, p_limit: 30, p_offset: 0 });
+  const users = useAdminRpc<User>('admin_list_all_users', { p_search: target || null, p_limit: 30, p_offset: 0 });
   const targetId = user?.user_id ?? '00000000-0000-0000-0000-000000000000';
   const candidates = useAdminRpc<Candidate>('admin_curated_candidates_for', { p_target: targetId });
   const current = useAdminRpc<CuratedRow>('admin_curated_current', { p_target: targetId });
