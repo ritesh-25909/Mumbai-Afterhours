@@ -235,6 +235,8 @@ type CandidateRow = Omit<
 };
 
 export async function fetchCandidates(): Promise<Candidate[]> {
+  // Visibility, gender/age preferences and staff overrides are enforced
+  // inside the SECURITY DEFINER discover_profiles RPC, never client-side.
   const { data, error } = await supabase.rpc(
     'discover_profiles',
     {
