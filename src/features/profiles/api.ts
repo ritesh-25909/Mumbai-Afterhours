@@ -26,7 +26,7 @@ export type Profile = {
 
   profile_prompts: ProfilePromptAnswer[] | null;
 
-  // New optional profile fields
+  // Existing profile fields
   smoking: string | null;
   alcohol: string | null;
   religion: string | null;
@@ -36,6 +36,9 @@ export type Profile = {
   verified: boolean;
   moderation_status: 'pending' | 'approved' | 'rejected' | 'suspended';
   show_neighbourhood: boolean;
+
+  // One-time verification notice tracking
+  verification_notice_seen_at: string | null;
 };
 
 export type Prefs = {
@@ -138,6 +141,7 @@ export async function updateProfile(
   }
 ): Promise<void> {
   if (!uid) throw new Error('User ID is missing.');
+
   if (!b || Object.keys(b).length === 0) {
     throw new Error('No profile changes were provided.');
   }
