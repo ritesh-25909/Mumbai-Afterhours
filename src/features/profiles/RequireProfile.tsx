@@ -4,7 +4,12 @@ import { Link, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { useMyProfile } from './useMyProfile';
 import { supabase } from '../../lib/supabase';
-import { Logo } from '../../components/ui/Logo';
+import type { Profile } from './api';
+
+// Local extension: avoids requiring an immediate change to api.ts.
+type ProfileWithVerificationNotice = Profile & {
+  verification_notice_seen_at?: string | null;
+};
 
 function VerificationPending({
   firstNotice,
@@ -18,14 +23,7 @@ function VerificationPending({
   return (
     <main className="grid min-h-screen place-items-center bg-ink px-4 py-10">
       <section className="card w-full max-w-md space-y-5 p-7 text-center">
-        <div className="flex justify-center">
-          <Logo light={false} />
-        </div>
-
-        <div
-          className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-blue-50 text-3xl"
-          aria-hidden="true"
-        >
+        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-blue-50 text-3xl">
           🛡️
         </div>
 
@@ -55,8 +53,7 @@ function VerificationPending({
             </h1>
 
             <p className="text-sm leading-6 text-slate2">
-              Your verification is still pending. You can check again here
-              once our team has reviewed your profile.
+              Your verification is still pending. Please check again later.
             </p>
           </>
         )}
@@ -92,26 +89,31 @@ export function RequireProfile() {
   const { profile, loading, error, reload } = useMyProfile();
   const { signOut } = useAuth();
 
-  const [firstNotice, setFirstNotice] = useState<boolean | null>(null);
+  const [firstNotice, setFirstNotice] = useState(true);
+
+  const profileWithNotice =
+    profile as ProfileWithVerificationNotice | null;
 
   useEffect(() => {
     if (
-      !profile?.profile_complete ||
-      profile.moderation_status !== 'pending'
+      !profileWithNotice ||
+      !profileWithNotice.profile_complete ||
+      profileWithNotice.moderation_status !== 'pending'
     ) {
       return;
     }
 
-    const isFirstNotice = !profile.verification_notice_seen_at;
+    const noticeAlreadySeen =
+      !!profileWithNotice.verification_notice_seen_at;
 
-    setFirstNotice(isFirstNotice);
+    setFirstNotice(!noticeAlreadySeen);
 
-    if (isFirstNotice) {
+    if (!noticeAlreadySeen) {
       void supabase.rpc('mark_my_verification_notice_seen').then(
         ({ error: rpcError }) => {
           if (rpcError) {
             console.error(
-              'Could not save verification notice state:',
+              'Could not save verification notice:',
               rpcError.message
             );
           }
@@ -119,10 +121,10 @@ export function RequireProfile() {
       );
     }
   }, [
-    profile?.id,
-    profile?.profile_complete,
-    profile?.moderation_status,
-    profile?.verification_notice_seen_at,
+    profileWithNotice?.id,
+    profileWithNotice?.profile_complete,
+    profileWithNotice?.moderation_status,
+    profileWithNotice?.verification_notice_seen_at,
   ]);
 
   if (loading) {
@@ -137,7 +139,7 @@ export function RequireProfile() {
     return (
       <p className="p-8 text-bad" role="alert">
         {error}{' '}
-        <button className="underline" onClick={reload}>
+        <button className="underline" onClick={() => void reload()}>
           Retry
         </button>
       </p>
@@ -162,7 +164,10 @@ export function RequireProfile() {
               Help
             </Link>
 
-            <button className="btn-outline" onClick={signOut}>
+            <button
+              className="btn-outline"
+              onClick={() => void signOut()}
+            >
               Log out
             </button>
           </div>
@@ -185,7 +190,7 @@ export function RequireProfile() {
   if (profile.moderation_status === 'pending') {
     return (
       <VerificationPending
-        firstNotice={firstNotice ?? !profile.verification_notice_seen_at}
+        firstNotice={firstNotice}
         onRefresh={() => void reload()}
         onSignOut={() => void signOut()}
       />
@@ -194,22 +199,25 @@ export function RequireProfile() {
 
   if (profile.moderation_status === 'rejected') {
     return (
-      <main className="grid min-h-screen place-items-center bg-ink px-4">
+      <main className="grid min-h-screen place-items-center px-4">
         <div className="card max-w-md space-y-4 p-6 text-center">
           <h1 className="text-xl font-extrabold">
             Your profile needs attention
           </h1>
 
           <p className="text-sm leading-6 text-slate2">
-            We couldn't approve your profile at this time. Please contact our
-            support team for assistance.
+            We couldn't approve your profile at this time. Please contact
+            our support team for assistance.
           </p>
 
           <Link to="/help" className="btn-primary block">
             Contact support
           </Link>
 
-          <button className="btn-outline w-full" onClick={signOut}>
+          <button
+            className="btn-outline w-full"
+            onClick={() => void signOut()}
+          >
             Log out
           </button>
         </div>
