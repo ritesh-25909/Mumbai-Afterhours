@@ -86,13 +86,38 @@ function VerificationPending({
 }
 
 export function RequireProfile() {
-  const { profile, loading, error, reload } = useMyProfile();
-  const { signOut } = useAuth();
+  const {
+    profile,
+    loading,
+    error,
+    reload,
+  } = useMyProfile();
+
+  const {
+    signOut,
+    loading: authLoading,
+    session,
+  } = useAuth();
 
   const [firstNotice, setFirstNotice] = useState(true);
 
   const profileWithNotice =
     profile as ProfileWithVerificationNotice | null;
+
+  // Wait until Supabase finishes restoring the saved session.
+  if (authLoading) {
+    return (
+      <p className="p-8 text-slate2" role="status">
+        Loading…
+      </p>
+    );
+  }
+
+  // Authentication has finished and no session exists.
+  // Do not redirect to onboarding as if the user had a profile.
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
 
   useEffect(() => {
     if (
@@ -139,7 +164,10 @@ export function RequireProfile() {
     return (
       <p className="p-8 text-bad" role="alert">
         {error}{' '}
-        <button className="underline" onClick={() => void reload()}>
+        <button
+          className="underline"
+          onClick={() => void reload()}
+        >
           Retry
         </button>
       </p>
