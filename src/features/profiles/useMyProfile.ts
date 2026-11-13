@@ -4,7 +4,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { getMyProfile, type Profile } from './api';
 
 export function useMyProfile() {
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const uid = session?.user.id;
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -12,6 +12,12 @@ export function useMyProfile() {
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
+    // Never interpret an unfinished auth initialization as logged out.
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
     if (!uid) {
       setProfile(null);
       setError(null);
@@ -34,7 +40,7 @@ export function useMyProfile() {
     } finally {
       setLoading(false);
     }
-  }, [uid]);
+  }, [uid, authLoading]);
 
   useEffect(() => {
     void reload();
@@ -43,7 +49,7 @@ export function useMyProfile() {
   return {
     uid,
     profile,
-    loading,
+    loading: authLoading || loading,
     error,
     reload,
   };
