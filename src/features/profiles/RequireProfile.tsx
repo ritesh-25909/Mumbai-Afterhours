@@ -1,12 +1,11 @@
-
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Outlet } from 'react-router-dom';
+
 import { useAuth } from '../auth/AuthProvider';
 import { useMyProfile } from './useMyProfile';
 import { supabase } from '../../lib/supabase';
 import type { Profile } from './api';
 
-// Local extension: avoids requiring an immediate change to api.ts.
 type ProfileWithVerificationNotice = Profile & {
   verification_notice_seen_at?: string | null;
 };
@@ -38,8 +37,8 @@ function VerificationPending({
             </p>
 
             <p className="text-sm leading-6 text-slate2">
-              Your profile is currently under verification. We'll notify you
-              once your profile has been successfully verified.
+              Your profile is currently under verification. We'll notify
+              you once your profile has been successfully verified.
             </p>
 
             <p className="text-sm text-slate2">
@@ -104,21 +103,7 @@ export function RequireProfile() {
   const profileWithNotice =
     profile as ProfileWithVerificationNotice | null;
 
-  // Wait until Supabase finishes restoring the saved session.
-  if (authLoading) {
-    return (
-      <p className="p-8 text-slate2" role="status">
-        Loading…
-      </p>
-    );
-  }
-
-  // Authentication has finished and no session exists.
-  // Do not redirect to onboarding as if the user had a profile.
-  if (!session) {
-    return <Navigate to="/login" replace />;
-  }
-
+  // Keep hooks unconditional and in a stable order.
   useEffect(() => {
     if (
       !profileWithNotice ||
@@ -139,10 +124,10 @@ export function RequireProfile() {
           if (rpcError) {
             console.error(
               'Could not save verification notice:',
-              rpcError.message
+              rpcError.message,
             );
           }
-        }
+        },
       );
     }
   }, [
@@ -151,6 +136,18 @@ export function RequireProfile() {
     profileWithNotice?.moderation_status,
     profileWithNotice?.verification_notice_seen_at,
   ]);
+
+  if (authLoading) {
+    return (
+      <p className="p-8 text-slate2" role="status">
+        Loading…
+      </p>
+    );
+  }
+
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (loading) {
     return (
@@ -183,8 +180,8 @@ export function RequireProfile() {
           </h1>
 
           <p className="text-slate2">
-            Your profile is hidden and you cannot match or chat. If you think
-            this is a mistake, contact support (see Help).
+            Your profile is hidden and you cannot match or chat. If you
+            think this is a mistake, contact support (see Help).
           </p>
 
           <div className="flex justify-center gap-3">
@@ -251,6 +248,12 @@ export function RequireProfile() {
         </div>
       </main>
     );
+  }
+
+  // Mandatory selfie verification:
+  // no normal protected application route is accessible until approved.
+  if (!profile.verified) {
+    return <Navigate to="/verify" replace />;
   }
 
   return <Outlet />;
