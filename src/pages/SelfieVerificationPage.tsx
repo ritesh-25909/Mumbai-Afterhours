@@ -48,8 +48,8 @@ export default function SelfieVerificationPage() {
   const [loading, setLoading] = useState(true);
   const [consent, setConsent] = useState(false);
   const [phase, setPhase] = useState<Phase>('idle');
-
   const [currentIndex, setCurrentIndex] = useState(0);
+
   const [files, setFiles] = useState<Partial<SelfieFiles>>({});
   const [previews, setPreviews] = useState<
     Partial<Record<SelfieAngle, string>>
@@ -57,12 +57,12 @@ export default function SelfieVerificationPage() {
 
   const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
   const [capturedPreview, setCapturedPreview] = useState<string | null>(null);
-
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
+  const objectUrls = useRef<Set<string>>(new Set());
 
   const currentAngle = ANGLES[currentIndex];
 
@@ -75,9 +75,25 @@ export default function SelfieVerificationPage() {
     }
   }, []);
 
+  const createPreview = useCallback((blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    objectUrls.current.add(url);
+    return url;
+  }, []);
+
+  const revokePreview = useCallback((url: string | null) => {
+    if (!url) return;
+
+    URL.revokeObjectURL(url);
+    objectUrls.current.delete(url);
+  }, []);
+
   useEffect(() => {
     return () => {
       stopCamera();
+
+      objectUrls.current.forEach(url => URL.revokeObjectURL(url));
+      objectUrls.current.clear();
     };
   }, [stopCamera]);
 
@@ -104,40 +120,25 @@ export default function SelfieVerificationPage() {
     };
   }, [uid, done]);
 
-  useEffect(() => {
-    return () => {
-      Object.values(previews).forEach(url => {
-        if (url) URL.revokeObjectURL(url);
-      });
-
-      if (capturedPreview) {
-        URL.revokeObjectURL(capturedPreview);
-      }
-    };
-  }, [previews, capturedPreview]);
-
   async function startCamera() {
     setErr(null);
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      setErr(
-        'This browser cannot access a camera. Please use a supported browser.',
-      );
+      setErr('This browser cannot access a camera. Please use a supported browser.');
       return;
     }
 
     try {
       stopCamera();
 
-      const cameraStream =
-        await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 1280 },
-          },
-          audio: false,
-        });
+      const cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 1280 },
+        },
+        audio: false,
+      });
 
       stream.current = cameraStream;
       setPhase('camera');
@@ -164,26 +165,21 @@ export default function SelfieVerificationPage() {
   }
 
   async function capture() {
-    const videoElement = video.current;
+    const element = video.current;
 
-    if (!videoElement || !videoElement.videoWidth) {
+    if (!element || !element.videoWidth) {
       setErr('Camera is not ready. Please wait and try again.');
       return;
     }
 
     const scale = Math.min(
       1,
-      1024 /
-        Math.max(
-          videoElement.videoWidth,
-          videoElement.videoHeight,
-        ),
+      1024 / Math.max(element.videoWidth, element.videoHeight),
     );
 
     const canvas = document.createElement('canvas');
-
-    canvas.width = Math.round(videoElement.videoWidth * scale);
-    canvas.height = Math.round(videoElement.videoHeight * scale);
+    canvas.width = Math.round(element.videoWidth * scale);
+    canvas.height = Math.round(element.videoHeight * scale);
 
     const context = canvas.getContext('2d');
 
@@ -192,13 +188,7 @@ export default function SelfieVerificationPage() {
       return;
     }
 
-    context.drawImage(
-      videoElement,
-      0,
-      0,
-      canvas.width,
-      canvas.height,
-    );
+    context.drawImage(element, 0, 0, canvas.width, canvas.height);
 
     const blob = await new Promise<Blob | null>(resolve => {
       canvas.toBlob(resolve, 'image/jpeg', 0.88);
@@ -211,23 +201,17 @@ export default function SelfieVerificationPage() {
 
     stopCamera();
 
-    if (capturedPreview) {
-      URL.revokeObjectURL(capturedPreview);
-    }
+    revokePreview(capturedPreview);
 
     setCapturedBlob(blob);
-    setCapturedPreview(URL.createObjectURL(blob));
+    setCapturedPreview(createPreview(blob));
     setPhase('captured');
     setErr(null);
   }
 
   function retakeCurrent() {
     setCapturedBlob(null);
-
-    if (capturedPreview) {
-      URL.revokeObjectURL(capturedPreview);
-    }
-
+    revokePreview(capturedPreview);
     setCapturedPreview(null);
     void startCamera();
   }
@@ -236,6 +220,8 @@ export default function SelfieVerificationPage() {
     if (!capturedBlob || !capturedPreview) return;
 
     const angle = currentAngle.key;
+
+    revokePreview(previews[angle] ?? null);
 
     setFiles(previous => ({
       ...previous,
@@ -253,26 +239,21 @@ export default function SelfieVerificationPage() {
 
     if (currentIndex < ANGLES.length - 1) {
       setCurrentIndex(index => index + 1);
-      setPhase('idle');
-    } else {
-      setPhase('idle');
     }
+
+    setPhase('idle');
   }
 
   function editAngle(index: number) {
     setCurrentIndex(index);
     setCapturedBlob(null);
-
-    if (capturedPreview) {
-      URL.revokeObjectURL(capturedPreview);
-    }
-
+    revokePreview(capturedPreview);
     setCapturedPreview(null);
     setPhase('idle');
     setErr(null);
   }
 
-  const allCaptured = ANGLES.every(angle => !!files[angle.key]);
+  const allCaptured = ANGLES.every(angle => Boolean(files[angle.key]));
 
   async function submit() {
     if (!uid || !allCaptured) {
@@ -299,7 +280,6 @@ export default function SelfieVerificationPage() {
 
       setDone(true);
       setFiles({});
-      setPreviews({});
       await reload();
     } catch (error) {
       setErr(
@@ -332,13 +312,11 @@ export default function SelfieVerificationPage() {
           </span>
         </div>
 
-        <h1 className="text-2xl font-extrabold">
-          Verify your profile
-        </h1>
+        <h1 className="text-2xl font-extrabold">Verify your profile</h1>
 
         <p className="text-sm leading-6 text-slate2">
-          Capture three selfies from different angles. Our moderation
-          team will review them before unlocking your account.
+          Capture three selfies from different angles. Our moderation team
+          will review them before unlocking your account.
         </p>
       </header>
 
@@ -358,8 +336,8 @@ export default function SelfieVerificationPage() {
         <section className="card space-y-2 p-5" role="status">
           <h2 className="font-bold">Verification under review</h2>
           <p className="text-sm leading-6 text-slate2">
-            All three selfies have been submitted. Your account will
-            remain locked until a moderator approves your verification.
+            All three selfies have been submitted. Your account will remain
+            locked until a moderator approves your verification.
           </p>
         </section>
       )}
@@ -367,15 +345,14 @@ export default function SelfieVerificationPage() {
       {!alreadyVerified &&
         req &&
         (req.status === 'rejected' || req.status === 'retry') && (
-          <section className="card border-warn space-y-2 p-5" role="status">
+          <section className="card space-y-2 border-warn p-5" role="status">
             <h2 className="font-bold">
               {req.status === 'retry'
                 ? 'Please submit new selfies'
                 : 'Verification not approved'}
             </h2>
             <p className="text-sm leading-6 text-slate2">
-              {REASONS[req.rejection_reason_code ?? 'other'] ??
-                REASONS.other}
+              {REASONS[req.rejection_reason_code ?? 'other'] ?? REASONS.other}
               {' '}Please capture all three angles again.
             </p>
           </section>
@@ -387,7 +364,7 @@ export default function SelfieVerificationPage() {
             <div className="flex items-center justify-between">
               <h2 className="font-bold">Your three required selfies</h2>
               <span className="text-sm font-semibold text-royal">
-                {ANGLES.filter(a => files[a.key]).length}/3 complete
+                {ANGLES.filter(angle => files[angle.key]).length}/3 complete
               </span>
             </div>
 
@@ -435,13 +412,27 @@ export default function SelfieVerificationPage() {
             </div>
 
             <div className="rounded-xl bg-ink p-4">
-              <p className="text-sm font-bold">
-                {currentAngle.title}
-              </p>
+              <p className="text-sm font-bold">{currentAngle.title}</p>
               <p className="mt-1 text-sm leading-6 text-slate2">
                 {currentAngle.instruction}
               </p>
             </div>
+
+            <label className="flex items-start gap-2 text-sm leading-6">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={consent}
+                onChange={event => setConsent(event.target.checked)}
+                disabled={phase === 'submitting'}
+              />
+              <span>
+                I consent to Mumbai Afterhours processing my three selfies
+                for manual verification against my profile photos. I
+                understand that the images are private and accessible to
+                authorized moderators for review.
+              </span>
+            </label>
 
             {phase === 'idle' && (
               <button
@@ -451,9 +442,7 @@ export default function SelfieVerificationPage() {
                 onClick={() => void startCamera()}
               >
                 <Camera className="h-5 w-5" />
-                {files[currentAngle.key]
-                  ? 'Retake this selfie'
-                  : 'Open camera'}
+                {files[currentAngle.key] ? 'Retake this selfie' : 'Open camera'}
               </button>
             )}
 
@@ -509,21 +498,10 @@ export default function SelfieVerificationPage() {
 
             {phase === 'idle' && allCaptured && (
               <div className="space-y-3 border-t border-line pt-4">
-                <label className="flex items-start gap-2 text-sm leading-6">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={consent}
-                    onChange={event => setConsent(event.target.checked)}
-                    disabled={phase === 'submitting'}
-                  />
-                  <span>
-                    I consent to Mumbai Afterhours processing my three
-                    selfies for manual verification against my profile
-                    photos. I understand that the images are private and
-                    accessible to authorized moderators for review.
-                  </span>
-                </label>
+                <p className="text-sm text-slate2">
+                  All three angles are ready. Submit them together for
+                  moderator review.
+                </p>
 
                 <button
                   type="button"
@@ -556,11 +534,24 @@ export default function SelfieVerificationPage() {
               <li>All three angles are required before submission.</li>
               <li>Selfies are stored in private Supabase storage.</li>
               <li>Only authorized moderators and admins can review them.</li>
-              <li>Submitted selfies are deleted after a review decision is recorded, subject to successful storage deletion.</li>
-              <li>This is a manual visual review, not automated identity or liveness verification.</li>
+              <li>
+                Submitted selfies are deleted after a review decision is
+                recorded, subject to successful storage deletion.
+              </li>
+              <li>
+                This is a manual visual review, not automated identity or
+                liveness verification.
+              </li>
             </ul>
           </section>
         </>
+      )}
+
+      {done && !pending && !alreadyVerified && (
+        <p className="card p-4 text-sm text-slate2" role="status">
+          Your selfies were submitted. Refresh your verification status
+          shortly.
+        </p>
       )}
     </main>
   );
