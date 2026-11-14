@@ -1,4 +1,3 @@
-
 import { useAuth } from '../features/auth/AuthProvider';
 import {
   createBrowserRouter,
@@ -128,9 +127,17 @@ export const router = createBrowserRouter(
           element: <DeleteAccountPage />,
         },
 
+        // MANDATORY SELFIE VERIFICATION
+        // This route intentionally stays outside RequireProfile.
+        // Otherwise unverified users could not reach verification.
+        {
+          path: '/verify',
+          element: <SelfieVerificationPage />,
+        },
+
         // ADMIN COMMAND CENTER
-        // Protected by existing AdminGuard.
-        // Does not require a completed public profile.
+        // Admin and moderator access remains independent of
+        // normal member selfie verification.
         {
           path: '/admin',
           element: (
@@ -190,7 +197,7 @@ export const router = createBrowserRouter(
           ],
         },
 
-        // PROFILE PROTECTION
+        // PROFILE + SELFIE VERIFICATION PROTECTION
         {
           element: <RequireProfile />,
           children: [
@@ -220,10 +227,6 @@ export const router = createBrowserRouter(
                 {
                   path: '/profile',
                   element: <ProfileSettingsPage />,
-                },
-                {
-                  path: '/verify',
-                  element: <SelfieVerificationPage />,
                 },
                 {
                   path: '/moderation',
@@ -265,5 +268,5 @@ export const router = createBrowserRouter(
   {
     basename:
       import.meta.env.BASE_URL.replace(/\/$/, '') || undefined,
-  }
+  },
 );
