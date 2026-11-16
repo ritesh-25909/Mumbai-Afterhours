@@ -234,19 +234,28 @@ type CandidateRow = Omit<
   profile_prompts: unknown;
 };
 
-export async function fetchCandidates(): Promise<Candidate[]> {
-  // Visibility, gender/age preferences and staff overrides are enforced
-  // inside the SECURITY DEFINER discover_profiles RPC, never client-side.
-  const { data, error } = await supabase.rpc(
-    'discover_profiles',
-    {
-      page_size: 10,
-      page_offset: 0,
-    }
-  );
+export async function fetchCandidates(
+  isAdmin = false
+): Promise<Candidate[]> {
+  // Admin and Super Admin use the separate admin-only RPC.
+  // Normal users continue using the original discovery RPC.
+  const { data, error } = isAdmin
+    ? await supabase.rpc('admin_discover_all_profiles', {
+        page_size: 10,
+        page_offset: 0,
+      })
+    : await supabase.rpc('discover_profiles', {
+        page_size: 10,
+        page_offset: 0,
+      });
 
   if (error) {
-    console.error('discover_profiles error:', error);
+    console.error(
+      isAdmin
+        ? 'admin_discover_all_profiles error:'
+        : 'discover_profiles error:',
+      error
+    );
 
     throw new Error(
       'Could not load profiles. Check your connection and try again.'
