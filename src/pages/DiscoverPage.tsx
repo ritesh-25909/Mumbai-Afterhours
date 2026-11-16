@@ -46,6 +46,9 @@ export default function DiscoverPage() {
   const { session } = useAuth();
   const uid = session!.user.id;
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminChecked, setAdminChecked] = useState(false);
+
   const { profile, loading: profileLoading } = useMyProfile();
 
   const [queue, setQueue] = useState<Candidate[]>([]);
@@ -210,20 +213,63 @@ export default function DiscoverPage() {
   }, [requestLocation]);
 
   // =====================================================
+  // ADMIN ROLE CHECK
+  // =====================================================
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkAdminRole() {
+      try {
+        const { data, error } = await supabase.rpc('my_roles');
+
+        if (error) throw error;
+
+        const roles = (data ?? []) as string[];
+
+        if (active) {
+          setIsAdmin(
+            roles.includes('admin') ||
+            roles.includes('super_admin')
+          );
+        }
+      } catch (error) {
+        console.error('Discover admin role check failed:', error);
+        if (active) setIsAdmin(false);
+      } finally {
+        if (active) setAdminChecked(true);
+      }
+    }
+
+    void checkAdminRole();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // =====================================================
   // LOAD CANDIDATES
+  // Admin/Super Admin use the admin-only RPC.
+  // Normal users keep using the existing discovery RPC.
   // =====================================================
 
   const load = useCallback(async () => {
-    if (loadingMore.current) return;
+    if (!adminChecked || loadingMore.current) return;
 
     loadingMore.current = true;
 
     try {
-      const rows = await fetchCandidates();
+      const rows = await fetchCandidates(isAdmin);
+
+      console.log('DISCOVER ADMIN MODE:', isAdmin);
+      console.log('DISCOVER PROFILES RECEIVED:', rows.length);
 
       setQueue(q => {
         const have = new Set(q.map(x => x.id));
 
+        // The admin RPC ignores previous database likes/passes.
+        // This set only prevents repeating profiles in this page session.
         const fresh = rows.filter(
           r =>
             !have.has(r.id) &&
@@ -241,16 +287,19 @@ export default function DiscoverPage() {
 
       setErr(null);
     } catch (e) {
+      console.error('DISCOVER LOAD ERROR:', e);
       setErr((e as Error).message);
     } finally {
       setLoading(false);
       loadingMore.current = false;
     }
-  }, []);
+  }, [adminChecked, isAdmin]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (adminChecked) {
+      void load();
+    }
+  }, [adminChecked, load]);
 
   // =====================================================
   // PREFETCH MORE CANDIDATES
@@ -333,23 +382,25 @@ export default function DiscoverPage() {
     );
   };
 
-  const visibleQueue = queue
-    .filter(candidate => !verifiedOnly || candidate.verified)
-    .filter(
-      candidate =>
-        !sharedOnly || sharedFor(candidate).length > 0,
-    )
-    .filter(candidate => {
-      if (maxDistance === 'any') return true;
+  const visibleQueue = isAdmin
+    ? [...queue]
+    : queue
+        .filter(candidate => !verifiedOnly || candidate.verified)
+        .filter(
+          candidate =>
+            !sharedOnly || sharedFor(candidate).length > 0,
+        )
+        .filter(candidate => {
+          if (maxDistance === 'any') return true;
 
-      const distance = candidateDistance(candidate);
+          const distance = candidateDistance(candidate);
 
-      return (
-        distance !== null &&
-        distance <= Number(maxDistance)
-      );
-    })
-    .sort((a, b) => scoreFor(b) - scoreFor(a));
+          return (
+            distance !== null &&
+            distance <= Number(maxDistance)
+          );
+        })
+        .sort((a, b) => scoreFor(b) - scoreFor(a));
 
   const current = visibleQueue[0];
 
@@ -436,7 +487,7 @@ export default function DiscoverPage() {
   // LOADING
   // =====================================================
 
-  if (loading || profileLoading) {
+  if (loading || profileLoading || !adminChecked) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <p
