@@ -1,3 +1,4 @@
+
 import { supabase } from '../../lib/supabase';
 import { POLICY_VERSION } from '../../lib/constants';
 
@@ -21,9 +22,16 @@ export const REASONS: Record<string, string> = {
   other: 'Your verification could not be approved.',
 };
 
+/**
+ * Fetch the latest verification request for a user.
+ */
 export async function getLatestRequest(
   uid: string,
 ): Promise<VRequest | null> {
+  if (!uid) {
+    throw new Error('User ID is missing.');
+  }
+
   const { data, error } = await supabase
     .from('verification_requests')
     .select('id,status,submitted_at,rejection_reason_code')
@@ -33,18 +41,22 @@ export async function getLatestRequest(
     .maybeSingle();
 
   if (error) {
-    throw new Error('Could not load your verification status.');
+    console.error('getLatestRequest failed:', error);
+
+    throw new Error(
+      `Could not load your verification status: ${error.message}`,
+    );
   }
 
   return data as VRequest | null;
 }
 
 /**
- * Uploads three separately captured selfie angles.
+ * Upload three separately captured selfie angles.
  *
- * All three files are uploaded to the private verification bucket.
- * The database submission is created only after all uploads succeed.
- * Any uploaded files are removed if a later step fails.
+ * Files are uploaded to the private verification bucket.
+ * The database request is created only after all uploads succeed.
+ * Failed submissions trigger cleanup of uploaded files.
  */
 export async function submitSelfies(
   uid: string,
@@ -54,7 +66,11 @@ export async function submitSelfies(
     throw new Error('User ID is missing.');
   }
 
-  const angles: SelfieAngle[] = ['front', 'left', 'right'];
+  const angles: SelfieAngle[] = [
+    'front',
+    'left',
+    'right',
+  ];
 
   const paths: Record<SelfieAngle, string> = {
     front: `${uid}/${crypto.randomUUID()}-front.jpg`,
@@ -81,7 +97,7 @@ export async function submitSelfies(
 
       if (upload.error) {
         throw new Error(
-          `Could not upload your ${angle} selfie. Check your connection and try again.`,
+          `Could not upload your ${angle} selfie: ${upload.error.message}`,
         );
       }
 
@@ -97,7 +113,9 @@ export async function submitSelfies(
     });
 
     if (error) {
-      throw new Error(error.message);
+      throw new Error(
+        `Could not submit verification: ${error.message}`,
+      );
     }
   } catch (error) {
     if (uploadedPaths.length > 0) {
@@ -107,7 +125,7 @@ export async function submitSelfies(
 
       if (cleanup.error) {
         console.error(
-          'Could not clean up incomplete verification uploads:',
+          'Verification upload cleanup failed:',
           cleanup.error.message,
         );
       }
@@ -128,26 +146,39 @@ export type Pending = {
   photo_paths: string[];
 };
 
+/**
+ * Fetch pending verification requests for moderators.
+ */
 export const listPending = async (): Promise<Pending[]> => {
   const { data, error } = await supabase.rpc(
     'list_pending_verifications',
   );
 
   if (error) {
-    throw new Error(error.message);
+    console.error('listPending failed:', error);
+    throw new Error(
+      `Could not load pending verifications: ${error.message}`,
+    );
   }
 
   return (data as Pending[]) ?? [];
 };
 
 /**
- * Records the moderator's decision and removes all three private selfies.
+ * Records a moderator's decision and deletes the three
+ * private selfies after the decision has been saved.
+ *
+ * The SQL function returns paths as newline-separated text.
  */
 export async function review(
   id: string,
   decision: 'approved' | 'rejected' | 'retry',
   reason?: string,
 ): Promise<boolean> {
+  if (!id) {
+    throw new Error('Verification request ID is missing.');
+  }
+
   const { data, error } = await supabase.rpc(
     'review_verification',
     {
@@ -158,15 +189,45 @@ export async function review(
   );
 
   if (error) {
-    throw new Error(error.message);
+    console.error('review_verification failed:', error);
+    throw new Error(
+      `Could not save the moderation decision: ${error.message}`,
+    );
   }
 
-  const paths = (data as string[] | null) ?? [];
+  // The SQL function returns a single text string,
+  // not a string array.
+  const rawPaths =
+    typeof data === 'string' ? data : '';
 
-  if (paths.length !== 3 || paths.some(path => !path)) {
+  const paths = rawPaths
+    .split(/\r?\n/)
+    .map(path => path.trim())
+    .filter(Boolean);
+
+  if (
+    paths.length !== 3 ||
+    paths.some(path => !path)
+  ) {
     console.error(
-      'Verification decision was saved, but three valid selfie paths were not returned.',
+      'The moderation decision was saved, but the three selfie paths were not returned correctly.',
+      data,
     );
+
+    return false;
+  }
+
+  // Only delete files belonging to the reviewed request's user.
+  const expectedPrefix = `${paths[0].split('/')[0]}/`;
+
+  if (
+    !paths.every(path => path.startsWith(expectedPrefix)) ||
+    paths.some(path => path.split('/').length !== 2)
+  ) {
+    console.error(
+      'Invalid verification selfie paths returned by the database.',
+    );
+
     return false;
   }
 
@@ -174,14 +235,27 @@ export async function review(
     .from('verification-selfies')
     .remove(paths);
 
-  return !deletion.error;
+  if (deletion.error) {
+    console.error(
+      'Moderation decision saved, but selfie deletion failed:',
+      deletion.error.message,
+    );
+
+    return false;
+  }
+
+  return true;
 }
 
+/**
+ * Retrieve the current user's application roles.
+ */
 export async function myRoles(): Promise<string[]> {
   const { data, error } = await supabase.rpc('my_roles');
 
   if (error) {
     console.error('MY ROLES RPC ERROR:', error);
+
     throw new Error(
       error.message || 'Could not verify account permissions.',
     );
