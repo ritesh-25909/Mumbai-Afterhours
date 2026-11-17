@@ -12,10 +12,7 @@ export function useMyProfile() {
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    if (authLoading) {
-      setLoading(true);
-      return;
-    }
+    if (authLoading) return;
 
     if (!uid) {
       setProfile(null);
@@ -24,7 +21,6 @@ export function useMyProfile() {
       return;
     }
 
-    setLoading(true);
     setError(null);
 
     try {
@@ -38,14 +34,53 @@ export function useMyProfile() {
 
       setError(message);
       console.error('Profile loading failed:', message);
-    } finally {
-      setLoading(false);
     }
   }, [uid, authLoading]);
 
+  // Initial profile loading.
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
+    let active = true;
+
+    const loadInitialProfile = async () => {
+      if (!uid) {
+        setProfile(null);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        const existingProfile = await getMyProfile(uid);
+        if (active) setProfile(existingProfile);
+      } catch (e) {
+        if (active) {
+          const message =
+            e instanceof Error
+              ? e.message
+              : 'Could not load your profile';
+
+          setError(message);
+          console.error('Profile loading failed:', message);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void loadInitialProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [uid, authLoading]);
 
   // Refresh when the user returns to the application.
   useEffect(() => {
@@ -57,24 +92,19 @@ export function useMyProfile() {
       }
     };
 
-    window.addEventListener('focus', handleVisibilityChange);
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void reload();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.removeEventListener('focus', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [uid, authLoading, reload]);
-
-  // Periodically check for moderator approval.
-  useEffect(() => {
-    if (!uid || authLoading) return;
-
-    const interval = window.setInterval(() => {
-      void reload();
-    }, 30000);
-
-    return () => window.clearInterval(interval);
   }, [uid, authLoading, reload]);
 
   return {
