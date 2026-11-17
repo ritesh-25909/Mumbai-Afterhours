@@ -7,7 +7,6 @@ import {
   Sparkles,
   X,
   MapPin,
-  RefreshCw,
 } from 'lucide-react';
 
 import { useAuth } from '../features/auth/AuthProvider';
@@ -146,27 +145,29 @@ export default function DiscoverPage() {
   }, [uid]);
 
   // =====================================================
-  // LOCATION
-  // GPS is preferred. Saved neighbourhood is fallback.
+  // LOCATION PERMISSION
+  // Show the custom prompt on each Discover visit unless
+  // browser permission is already granted.
   // =====================================================
 
   const neighbourhoodLocation = getNeighbourhoodCoordinates(
     profile?.neighbourhood ?? null,
   );
 
-  const effectiveLocation =
-    myLocation ?? neighbourhoodLocation;
+  const effectiveLocation = myLocation ?? neighbourhoodLocation;
 
-  /**
-   * Request the user's current location.
-   *
-   * Uses the existing getCurrentLocation helper so the
-   * project's existing Coordinates format is preserved.
-   */
+  const [locationPromptOpen, setLocationPromptOpen] = useState(false);
+  const [locationPermission, setLocationPermission] = useState<
+    'checking' | 'granted' | 'prompt' | 'denied' | 'unsupported'
+  >('checking');
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
   const requestLocation = useCallback(async () => {
     if (!navigator.geolocation) {
+      setLocationPermission('unsupported');
       setLocationError(
-        'Your browser does not support GPS location services.',
+        'Your browser does not support location services.',
       );
       return;
     }
@@ -182,24 +183,27 @@ export default function DiscoverPage() {
       }
 
       setMyLocation(coordinates);
+      setLocationPermission('granted');
+      setLocationPromptOpen(false);
       setLocationError(null);
     } catch (error) {
-      console.error('DISCOVER GPS ERROR:', error);
+      console.error('DISCOVER LOCATION ERROR:', error);
 
       const message =
         error instanceof Error ? error.message : '';
 
       if (/denied|permission/i.test(message)) {
+        setLocationPermission('denied');
         setLocationError(
-          'Location permission denied. Allow location access for this website in your browser settings, then try again.',
+          'Location access is blocked. Enable Location permission for this website in your browser settings, then revisit Discover.',
         );
       } else if (/timeout/i.test(message)) {
         setLocationError(
-          'Location request timed out. Please try again.',
+          'The location request timed out. You can try again.',
         );
       } else {
         setLocationError(
-          message || 'Unable to get your location. Please try again.',
+          message || 'Unable to get your location. You can continue without it.',
         );
       }
     } finally {
@@ -207,9 +211,68 @@ export default function DiscoverPage() {
     }
   }, []);
 
-  // Automatically attempt GPS when Discover opens.
   useEffect(() => {
-    void requestLocation();
+    let active = true;
+    let permissionStatus: PermissionStatus | null = null;
+
+    const applyPermission = (state: PermissionState) => {
+      if (!active) return;
+
+      if (state === 'granted') {
+        setLocationPermission('granted');
+        setLocationPromptOpen(false);
+        // Use GPS automatically only when the user has already granted it.
+        void requestLocation();
+      } else if (state === 'denied') {
+        setLocationPermission('denied');
+        setLocationPromptOpen(true);
+      } else {
+        setLocationPermission('prompt');
+        setLocationPromptOpen(true);
+      }
+    };
+
+    const checkPermission = async () => {
+      if (!navigator.geolocation) {
+        if (!active) return;
+        setLocationPermission('unsupported');
+        setLocationPromptOpen(true);
+        return;
+      }
+
+      if (!navigator.permissions?.query) {
+        if (!active) return;
+        setLocationPermission('prompt');
+        setLocationPromptOpen(true);
+        return;
+      }
+
+      try {
+        permissionStatus = await navigator.permissions.query({
+          name: 'geolocation',
+        });
+
+        if (!active) return;
+
+        applyPermission(permissionStatus.state);
+
+        permissionStatus.onchange = () => {
+          if (!permissionStatus) return;
+          applyPermission(permissionStatus.state);
+        };
+      } catch {
+        if (!active) return;
+        setLocationPermission('prompt');
+        setLocationPromptOpen(true);
+      }
+    };
+
+    void checkPermission();
+
+    return () => {
+      active = false;
+      if (permissionStatus) permissionStatus.onchange = null;
+    };
   }, [requestLocation]);
 
   // =====================================================
@@ -506,76 +569,66 @@ export default function DiscoverPage() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
-
-      {/* DISCOVER NEARBY / GPS */}
-
-      <section className="overflow-hidden rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
-              <MapPin className="h-5 w-5" />
+      {locationPromptOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="discover-location-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-blue-100 bg-white p-6 shadow-2xl">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-700">
+              <MapPin className="h-7 w-7" />
             </div>
 
-            <div className="min-w-0">
-              <h2 className="font-bold text-slate-900">
-                Discover nearby
-              </h2>
+            <h2
+              id="discover-location-title"
+              className="mt-4 text-center text-lg font-extrabold text-slate-900"
+            >
+              Enable your location
+            </h2>
 
-              <p className="mt-1 text-xs leading-5 text-slate-500">
-                {myLocation
-                  ? 'GPS location enabled. Distances are approximate.'
-                  : neighbourhoodLocation
-                    ? 'Using your saved neighbourhood. Enable GPS for a more accurate location.'
-                    : 'Enable GPS to see approximate distances.'}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void requestLocation()}
-            disabled={locationLoading}
-            className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {locationLoading ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                Locating…
-              </>
-            ) : (
-              <>
-                <MapPin className="h-4 w-4" />
-                {myLocation ? 'Refresh GPS' : 'Enable GPS'}
-              </>
-            )}
-          </button>
-        </div>
-
-        {locationError && (
-          <div
-            className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3"
-            role="alert"
-          >
-            <p className="text-sm leading-6 text-red-700">
-              {locationError}
+            <p className="mt-2 text-center text-sm leading-6 text-slate-600">
+              Allow location access to see approximate distances and discover people around you. You can continue using Discover without sharing your location.
             </p>
 
-            {/denied|permission/i.test(locationError) && (
-              <p className="mt-2 text-xs leading-5 text-red-600">
-                Open your browser's site settings, change Location
-                permission to Allow, refresh this page, and try again.
+            {locationPermission === 'denied' && (
+              <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                Location is blocked in your browser. Open this website's site settings, change Location to Allow, then return to Discover.
               </p>
             )}
-          </div>
-        )}
 
-        {myLocation && (
-          <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-700">
-            <BadgeCheck className="h-4 w-4" />
-            Your device location is active.
-          </p>
-        )}
-      </section>
+            {locationPermission === 'unsupported' && (
+              <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                Your browser does not support location access. You can still use Discover without it.
+              </p>
+            )}
+
+            {locationError && locationPermission !== 'denied' && (
+              <p className="mt-3 text-center text-xs text-red-600" role="alert">
+                {locationError}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void requestLocation()}
+              disabled={locationLoading || locationPermission === 'denied' || locationPermission === 'unsupported'}
+              className="mt-5 w-full rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {locationLoading ? 'Requesting location…' : 'Allow location'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setLocationPromptOpen(false)}
+              className="mt-2 w-full rounded-xl px-4 py-3 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              Not now
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* DISCOVER REFINEMENTS */}
 
