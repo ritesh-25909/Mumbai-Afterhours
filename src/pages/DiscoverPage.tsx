@@ -67,10 +67,6 @@ export default function DiscoverPage() {
   const [myLocation, setMyLocation] =
     useState<Coordinates | null>(null);
 
-  // GPS UI state
-  const [locationLoading, setLocationLoading] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-
   const handled = useRef(new Set<string>());
   const loadingMore = useRef(false);
 
