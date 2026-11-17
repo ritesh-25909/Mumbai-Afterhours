@@ -12,13 +12,11 @@ export function useMyProfile() {
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    // Wait until Supabase finishes restoring the saved session.
     if (authLoading) {
       setLoading(true);
       return;
     }
 
-    // No authenticated user after initialization.
     if (!uid) {
       setProfile(null);
       setError(null);
@@ -48,6 +46,36 @@ export function useMyProfile() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  // Refresh when the user returns to the application.
+  useEffect(() => {
+    if (!uid || authLoading) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void reload();
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [uid, authLoading, reload]);
+
+  // Periodically check for moderator approval.
+  useEffect(() => {
+    if (!uid || authLoading) return;
+
+    const interval = window.setInterval(() => {
+      void reload();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
+  }, [uid, authLoading, reload]);
 
   return {
     uid,
