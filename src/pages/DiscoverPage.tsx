@@ -142,8 +142,6 @@ export default function DiscoverPage() {
 
   // =====================================================
   // LOCATION PERMISSION
-  // Show the custom prompt on each Discover visit unless
-  // browser permission is already granted.
   // =====================================================
 
   const neighbourhoodLocation = getNeighbourhoodCoordinates(
@@ -217,7 +215,6 @@ export default function DiscoverPage() {
       if (state === 'granted') {
         setLocationPermission('granted');
         setLocationPromptOpen(false);
-        // Use GPS automatically only when the user has already granted it.
         void requestLocation();
       } else if (state === 'denied') {
         setLocationPermission('denied');
@@ -309,8 +306,6 @@ export default function DiscoverPage() {
 
   // =====================================================
   // LOAD CANDIDATES
-  // Admin/Super Admin use the admin-only RPC.
-  // Normal users keep using the existing discovery RPC.
   // =====================================================
 
   const load = useCallback(async () => {
@@ -327,8 +322,6 @@ export default function DiscoverPage() {
       setQueue(q => {
         const have = new Set(q.map(x => x.id));
 
-        // The admin RPC ignores previous database likes/passes.
-        // This set only prevents repeating profiles in this page session.
         const fresh = rows.filter(
           r =>
             !have.has(r.id) &&
@@ -525,13 +518,25 @@ export default function DiscoverPage() {
           );
         }
       } else {
-        await passUser(current.id);
+        // The pass RPC checks whether the other user
+        // has already liked the current user.
+        const result = await passUser(current.id);
+
+        if (result.matched && result.match_id) {
+          localMatches.add(result.match_id);
+          setMatched(current);
+          setActionNotice(null);
+        }
       }
 
       advance();
     } catch (e) {
-      const message = (e as Error).message;
+      const message =
+        e instanceof Error
+          ? e.message
+          : 'Something went wrong. Please try again.';
 
+      console.error('DISCOVER ACTION ERROR:', e);
       setErr(message);
 
       if (message.includes('no longer available')) {
