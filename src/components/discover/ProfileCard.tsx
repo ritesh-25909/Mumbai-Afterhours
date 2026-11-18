@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import type { ElementType, PointerEvent } from 'react';
 
 import {
-  BadgeCheck,
+  ShieldCheck,
   Heart,
   Send,
   X,
@@ -163,13 +163,46 @@ export function ProfileCard({
         <section className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-white p-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-700">Your connection snapshot</p>
-              <p className="mt-1 text-sm font-bold text-slate-900">{compatibilityScore >= 70 ? 'Strong shared signals' : compatibilityScore >= 40 ? 'Some promising overlap' : 'A chance to discover something new'}</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-700">
+                Your connection snapshot
+              </p>
+              <p className="mt-1 text-sm font-bold text-slate-900">
+                {compatibilityScore >= 70
+                  ? 'Strong shared signals'
+                  : compatibilityScore >= 40
+                    ? 'Some promising overlap'
+                    : 'A chance to discover something new'}
+              </p>
             </div>
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full border-4 border-blue-200 bg-white text-lg font-black text-blue-700" aria-label={`Shared profile signals ${compatibilityScore} out of 99`}>{compatibilityScore}%</div>
+            <div
+              className="grid h-14 w-14 shrink-0 place-items-center rounded-full border-4 border-blue-200 bg-white text-lg font-black text-blue-700"
+              aria-label={`Shared profile signals ${compatibilityScore} out of 99`}
+            >
+              {compatibilityScore}%
+            </div>
           </div>
-          {dailyPick && <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-blue-700 px-3 py-1 text-xs font-bold text-white"><Sparkles className="h-3 w-3" /> Top pick in this stack</p>}
-          {sharedInterests.length > 0 && <div className="mt-3"><p className="text-xs font-bold text-slate-600">Common ground</p><div className="mt-2 flex flex-wrap gap-2">{sharedInterests.slice(0, 5).map(item => <span key={item} className="rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800">{item}</span>)}</div></div>}
+
+          {dailyPick && (
+            <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-blue-700 px-3 py-1 text-xs font-bold text-white">
+              <Sparkles className="h-3 w-3" /> Top pick in this stack
+            </p>
+          )}
+
+          {sharedInterests.length > 0 && (
+            <div className="mt-3">
+              <p className="text-xs font-bold text-slate-600">Common ground</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {sharedInterests.slice(0, 5).map(item => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* MAIN PHOTO CARD */}
@@ -220,14 +253,21 @@ export function ProfileCard({
 
             {/* PROFILE NAME AND LOCATION */}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-5 pt-28 text-white">
-              <h2 className="flex items-center gap-2 text-3xl font-extrabold">
-                {candidate.display_name}, {candidate.age}
+              <h2 className="flex flex-wrap items-center gap-x-2 gap-y-2 text-3xl font-extrabold">
+                <span>
+                  {candidate.display_name}, {candidate.age}
+                </span>
 
                 {candidate.verified && (
-                  <BadgeCheck
-                    className="h-6 w-6 shrink-0 text-sky-300"
-                    aria-label="Verified"
-                  />
+                  <span
+                    role="img"
+                    aria-label="Verified profile"
+                    title="Verified profile"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#D8C49A]/40 bg-[#171923]/65 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.15em] text-[#E8D7AE] shadow-sm backdrop-blur-md"
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
+                    Verified
+                  </span>
                 )}
               </h2>
 
@@ -244,7 +284,6 @@ export function ProfileCard({
                 Number.isFinite(distanceKm) && (
                   <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-white">
                     <Navigation className="h-3.5 w-3.5" />
-
                     Approx.{' '}
                     {distanceKm < 10
                       ? distanceKm.toFixed(1)
@@ -288,9 +327,7 @@ export function ProfileCard({
         {/* LIFESTYLE */}
         {(lifestyle.length > 0 || candidate.religion) && (
           <section className="space-y-3">
-            <h3 className="text-lg font-bold text-ink">
-              Lifestyle
-            </h3>
+            <h3 className="text-lg font-bold text-ink">Lifestyle</h3>
 
             <div className="grid grid-cols-2 gap-2">
               {lifestyle.map(item => {
@@ -318,9 +355,7 @@ export function ProfileCard({
         {/* ABOUT */}
         {candidate.bio && (
           <section className="space-y-2">
-            <h3 className="text-lg font-bold text-ink">
-              About
-            </h3>
+            <h3 className="text-lg font-bold text-ink">About</h3>
 
             <p className="whitespace-pre-line text-[15px] leading-7 text-ink/80">
               {candidate.bio}
@@ -331,9 +366,7 @@ export function ProfileCard({
         {/* INTERESTS */}
         {candidate.interests.length > 0 && (
           <section className="space-y-3">
-            <h3 className="text-lg font-bold text-ink">
-              Interests
-            </h3>
+            <h3 className="text-lg font-bold text-ink">Interests</h3>
 
             <div className="flex flex-wrap gap-2">
               {candidate.interests.map(item => (
@@ -367,9 +400,7 @@ export function ProfileCard({
             <Languages className="mt-1 h-5 w-5 shrink-0 text-royal" />
 
             <div>
-              <p className="font-semibold text-ink">
-                Languages
-              </p>
+              <p className="font-semibold text-ink">Languages</p>
 
               <p className="mt-1 text-sm text-slate2">
                 {candidate.languages.join(', ')}
@@ -462,28 +493,50 @@ export function ProfileCard({
             htmlFor={`like-comment-${candidate.id}`}
             className="block text-sm font-bold text-ink"
           >
-            Add a personal comment <span className="font-normal text-slate2">(optional)</span>
+            Add a personal comment{' '}
+            <span className="font-normal text-slate2">(optional)</span>
           </label>
+
           <div className="mt-3 flex flex-wrap gap-2">
             {[
-              candidate.interests?.[0] ? `I noticed you’re into ${candidate.interests[0]} — how did you get started?` : 'What does your ideal weekend look like?',
-              candidate.neighbourhood ? `What’s your favourite hidden spot around ${candidate.neighbourhood}?` : 'What’s your favourite place in Mumbai?',
+              candidate.interests?.[0]
+                ? `I noticed you’re into ${candidate.interests[0]} — how did you get started?`
+                : 'What does your ideal weekend look like?',
+              candidate.neighbourhood
+                ? `What’s your favourite hidden spot around ${candidate.neighbourhood}?`
+                : 'What’s your favourite place in Mumbai?',
               'What’s one thing you could talk about for hours?',
-            ].map((suggestion, index) => <button key={index} type="button" onClick={() => setComment(suggestion.slice(0, 300))} className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-left text-xs font-medium text-blue-800 hover:bg-blue-100">{index === 0 ? 'Shared interest' : index === 1 ? 'Mumbai question' : 'Conversation starter'}</button>)}
+            ].map((suggestion, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => setComment(suggestion.slice(0, 300))}
+                className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-left text-xs font-medium text-blue-800 hover:bg-blue-100"
+              >
+                {index === 0
+                  ? 'Shared interest'
+                  : index === 1
+                    ? 'Mumbai question'
+                    : 'Conversation starter'}
+              </button>
+            ))}
           </div>
+
           <textarea
             id={`like-comment-${candidate.id}`}
             value={comment}
-            onChange={(event) => setComment(event.target.value.slice(0, 300))}
+            onChange={event => setComment(event.target.value.slice(0, 300))}
             maxLength={300}
             rows={3}
             placeholder="Tell them what caught your attention..."
             className="mt-2 w-full resize-none rounded-xl border border-line bg-mist/50 p-3 text-sm text-ink outline-none transition focus:border-royal focus:ring-2 focus:ring-royal/10"
             disabled={busy}
           />
+
           <div className="mt-1 text-right text-xs text-slate2">
             {comment.length}/300
           </div>
+
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button
               type="button"
@@ -494,6 +547,7 @@ export function ProfileCard({
               <Send className="h-4 w-4" />
               {busy ? 'Sending…' : 'Send Like'}
             </button>
+
             <button
               type="button"
               onClick={() => onLike('')}
@@ -502,6 +556,7 @@ export function ProfileCard({
             >
               Send without comment
             </button>
+
             <button
               type="button"
               onClick={() => setCommentOpen(false)}
