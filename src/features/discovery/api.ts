@@ -544,9 +544,11 @@ export async function likeUser(
 
 export async function passUser(
   id: string
-): Promise<void> {
-
-  const { error } = await supabase.rpc(
+): Promise<{
+  matched: boolean;
+  match_id: string | null;
+}> {
+  const { data, error } = await supabase.rpc(
     'pass_user',
     {
       target: id,
@@ -557,9 +559,16 @@ export async function passUser(
     console.error('PASS USER ERROR:', error);
 
     throw new Error(
-      'Could not record that. Try again.'
+      error.message === 'Unavailable.'
+        ? 'This profile is no longer available.'
+        : error.message
     );
   }
+
+  return data as {
+    matched: boolean;
+    match_id: string | null;
+  };
 }
 
 // ==========================================
