@@ -97,6 +97,57 @@ const timeLabel = (iso: string) =>
   });
 
 /* =====================================================
+   ACTIVITY TIME FORMATTER
+===================================================== */
+
+function formatActivityLabel(activity: string): string {
+  const timestamp = new Date(activity).getTime();
+
+  if (!Number.isFinite(timestamp)) {
+    return 'Offline';
+  }
+
+  const elapsed = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(elapsed / 60000);
+
+  if (minutes < 1) {
+    return 'Active just now';
+  }
+
+  if (minutes < 60) {
+    return `Active ${minutes} min ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `Active ${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+
+  if (days < 7) {
+    return `Active ${days} ${days === 1 ? 'day' : 'days'} ago`;
+  }
+
+  const weeks = Math.floor(days / 7);
+
+  if (weeks < 5) {
+    return `Active ${weeks} ${weeks === 1 ? 'week' : 'weeks'} ago`;
+  }
+
+  const months = Math.floor(days / 30);
+
+  if (months < 12) {
+    return `Active ${months} ${months === 1 ? 'month' : 'months'} ago`;
+  }
+
+  const years = Math.floor(days / 365);
+
+  return `Active ${years} ${years === 1 ? 'year' : 'years'} ago`;
+}
+
+/* =====================================================
    CONVERSATION VIEW
 ===================================================== */
 
@@ -135,7 +186,11 @@ export function ConversationView({
   const [peerReadAt, setPeerReadAt] = useState<string | null>(null);
   const [peerActivity, setPeerActivity] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
-  const [vanish, setVanish] = useState<VanishSettings>({ enabled: false, enabled_by: null, enabled_at: null });
+  const [vanish, setVanish] = useState<VanishSettings>({
+    enabled: false,
+    enabled_by: null,
+    enabled_at: null,
+  });
   const [menuSearch, setMenuSearch] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
@@ -174,21 +229,30 @@ export function ConversationView({
       getConversationSettings(id),
       getVanishSettings(id),
     ]);
+
     setMuted(conversationSettings.notifications_muted);
     setVanish(vanishSettings);
   }, [id, privacy.read_receipts_enabled, privacy.activity_status_enabled]);
 
   useEffect(() => {
-    void refreshConversationMeta().catch((e) => console.error('Chat settings refresh failed:', e));
+    void refreshConversationMeta().catch((e) =>
+      console.error('Chat settings refresh failed:', e)
+    );
+
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
         void refreshConversationMeta().catch(() => {});
       }
     }, 10000);
+
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void refreshConversationMeta().catch(() => {});
+      if (document.visibilityState === 'visible') {
+        void refreshConversationMeta().catch(() => {});
+      }
     };
+
     document.addEventListener('visibilitychange', onVisible);
+
     return () => {
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
@@ -197,6 +261,7 @@ export function ConversationView({
 
   async function toggleMute() {
     setActionBusy(true);
+
     try {
       await setConversationMuted(id, !muted);
       setMuted(!muted);
@@ -209,13 +274,17 @@ export function ConversationView({
 
   async function toggleVanish() {
     const next = !vanish.enabled;
+
     const confirmed = window.confirm(
       next
         ? 'Enable Vanish Mode for both people? New messages will expire after 24 hours.'
         : 'Turn off Vanish Mode? New messages will no longer expire automatically.'
     );
+
     if (!confirmed) return;
+
     setActionBusy(true);
+
     try {
       await setVanishMode(id, next);
       await refreshConversationMeta();
@@ -226,13 +295,14 @@ export function ConversationView({
     }
   }
 
+  /* =====================================================
+     ACTIVITY STATUS
+  ===================================================== */
+
   const activityLabel = isOnline
     ? 'Online'
     : peerActivity
-      ? (() => {
-          const minutes = Math.max(0, Math.floor((Date.now() - new Date(peerActivity).getTime()) / 60000));
-          return minutes < 1 ? 'Active now' : `Active ${minutes} min ago`;
-        })()
+      ? formatActivityLabel(peerActivity)
       : 'Offline';
 
   /* =====================================================
@@ -725,39 +795,109 @@ export function ConversationView({
       </header>
 
       {/* CHAT MENU */}
+
       {menu && (
         <div className="relative z-20 shrink-0 space-y-2 border-b border-white/10 bg-[#090f1c] p-4">
-          <Link to={`/user/${head.user_id}`} onClick={() => setMenu(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white hover:bg-white/10">
+          <Link
+            to={`/user/${head.user_id}`}
+            onClick={() => setMenu(false)}
+            className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white hover:bg-white/10"
+          >
             <BadgeCheck className="h-4 w-4 text-blue-400" /> View Profile
           </Link>
-          <button type="button" onClick={() => setMenuSearch((v) => !v)} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10">
+
+          <button
+            type="button"
+            onClick={() => setMenuSearch((v) => !v)}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10"
+          >
             <Search className="h-4 w-4" /> Search in Chat
           </button>
+
           {menuSearch && (
             <div className="flex items-center gap-2 px-2">
-              <input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search messages..." className="field min-w-0 flex-1" />
-              <button type="button" aria-label="Clear search" onClick={() => { setSearchTerm(''); setMenuSearch(false); }} className="rounded-lg p-2 text-slate-300 hover:bg-white/10"><X className="h-4 w-4" /></button>
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search messages..."
+                className="field min-w-0 flex-1"
+              />
+
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => {
+                  setSearchTerm('');
+                  setMenuSearch(false);
+                }}
+                className="rounded-lg p-2 text-slate-300 hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
-          <button type="button" disabled={actionBusy} onClick={() => void toggleMute()} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50">
+
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => void toggleMute()}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50"
+          >
             {muted ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
             {muted ? 'Unmute Notifications' : 'Mute Notifications'}
           </button>
-          <button type="button" disabled={actionBusy} onClick={() => void toggleVanish()} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50">
-            {vanish.enabled ? <Eye className="h-4 w-4 text-emerald-400" /> : <EyeOff className="h-4 w-4" />}
+
+          <button
+            type="button"
+            disabled={actionBusy}
+            onClick={() => void toggleVanish()}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-white hover:bg-white/10 disabled:opacity-50"
+          >
+            {vanish.enabled ? (
+              <Eye className="h-4 w-4 text-emerald-400" />
+            ) : (
+              <EyeOff className="h-4 w-4" />
+            )}
             {vanish.enabled ? 'Turn Off Vanish Mode' : 'Enable Vanish Mode'}
           </button>
-          <Link to="/settings/privacy" onClick={() => setMenu(false)} className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white hover:bg-white/10">
+
+          <Link
+            to="/settings/privacy"
+            onClick={() => setMenu(false)}
+            className="flex items-center gap-3 rounded-xl px-3 py-3 text-sm text-white hover:bg-white/10"
+          >
             <Settings className="h-4 w-4" /> Chat Settings / Privacy
           </Link>
+
           <div className="border-t border-white/10 pt-2">
-            <ReportBlock uid={uid} targetId={head.user_id!} name={head.display_name!} onBlocked={() => nav('/inbox')} />
+            <ReportBlock
+              uid={uid}
+              targetId={head.user_id!}
+              name={head.display_name!}
+              onBlocked={() => nav('/inbox')}
+            />
+
             <div className="text-center">
-              <button className="text-sm font-medium text-red-400 underline underline-offset-4" onClick={() => setUnmatchOpen(true)}>Unmatch</button>
+              <button
+                className="text-sm font-medium text-red-400 underline underline-offset-4"
+                onClick={() => setUnmatchOpen(true)}
+              >
+                Unmatch
+              </button>
             </div>
           </div>
-          {vanish.enabled && <p className="px-3 text-xs text-emerald-300">Vanish Mode is on. New messages expire after 24 hours.</p>}
-          {muted && <p className="px-3 text-xs text-slate-400">Notifications are muted for this conversation on your account.</p>}
+
+          {vanish.enabled && (
+            <p className="px-3 text-xs text-emerald-300">
+              Vanish Mode is on. New messages expire after 24 hours.
+            </p>
+          )}
+
+          {muted && (
+            <p className="px-3 text-xs text-slate-400">
+              Notifications are muted for this conversation on your account.
+            </p>
+          )}
         </div>
       )}
 
@@ -800,93 +940,107 @@ export function ConversationView({
           </div>
         )}
 
-        {msgs.filter((m) => !searchTerm.trim() || m.content.toLowerCase().includes(searchTerm.trim().toLowerCase())).map((m, i, visibleMsgs) => {
-          const mine = m.sender_user_id === uid;
+        {msgs
+          .filter(
+            (m) =>
+              !searchTerm.trim() ||
+              m.content.toLowerCase().includes(searchTerm.trim().toLowerCase())
+          )
+          .map((m, i, visibleMsgs) => {
+            const mine = m.sender_user_id === uid;
 
-          const newDay =
-            i === 0 ||
-            new Date(m.created_at).toDateString() !==
-              new Date(visibleMsgs[i - 1].created_at).toDateString();
+            const newDay =
+              i === 0 ||
+              new Date(m.created_at).toDateString() !==
+                new Date(visibleMsgs[i - 1].created_at).toDateString();
 
-          return (
-            <div key={m.id}>
-              {newDay && (
-                <div className="my-5 flex justify-center">
-                  <span className="rounded-full border border-white/10 bg-slate-900/80 px-4 py-1.5 text-xs font-medium text-slate-400 shadow-lg">
-                    {dayLabel(m.created_at)}
-                  </span>
-                </div>
-              )}
-
-              <div
-                className={`flex w-full ${
-                  mine ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                <div
-                  className={`
-                    max-w-[82%]
-                    break-words
-                    whitespace-pre-wrap
-                    rounded-[20px]
-                    px-4 py-3
-                    text-[15px]
-                    leading-relaxed
-                    shadow-lg
-                    sm:max-w-[70%]
-                    ${
-                      mine
-                        ? 'rounded-br-md bg-gradient-to-br from-[#087bff] to-[#0755d8] text-white shadow-blue-950/30'
-                        : 'rounded-bl-md border border-white/[0.07] bg-[#141b29] text-slate-100 shadow-black/20'
-                    }
-                    ${
-                      m.status === 'sending'
-                        ? 'opacity-60'
-                        : ''
-                    }
-                  `}
-                >
-                  {m.content}
-                </div>
-              </div>
-
-              <p
-                className={`mt-1 flex items-center gap-1.5 px-1 text-[11px] text-slate-500 ${
-                  mine ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {m.status === 'sending' ? (
-                  'Sending…'
-                ) : m.status === 'failed' ? (
-                  <>
-                    <AlertCircle
-                      className="h-3.5 w-3.5 text-red-400"
-                      aria-hidden
-                    />
-
-                    <span className="text-red-400">
-                      Not sent.
+            return (
+              <div key={m.id}>
+                {newDay && (
+                  <div className="my-5 flex justify-center">
+                    <span className="rounded-full border border-white/10 bg-slate-900/80 px-4 py-1.5 text-xs font-medium text-slate-400 shadow-lg">
+                      {dayLabel(m.created_at)}
                     </span>
-
-                    <button
-                      className="font-semibold text-blue-400 underline"
-                      onClick={() => void deliver(m)}
-                    >
-                      Retry
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {timeLabel(m.created_at)}
-                    {mine && privacy.read_receipts_enabled && peerReadAt && new Date(peerReadAt).getTime() >= new Date(m.created_at).getTime() && (
-                      <CheckCheck className="h-4 w-4 text-emerald-400" aria-label="Read" />
-                    )}
-                  </>
+                  </div>
                 )}
-              </p>
-            </div>
-          );
-        })}
+
+                <div
+                  className={`flex w-full ${
+                    mine ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  <div
+                    className={`
+                      max-w-[82%]
+                      break-words
+                      whitespace-pre-wrap
+                      rounded-[20px]
+                      px-4 py-3
+                      text-[15px]
+                      leading-relaxed
+                      shadow-lg
+                      sm:max-w-[70%]
+                      ${
+                        mine
+                          ? 'rounded-br-md bg-gradient-to-br from-[#087bff] to-[#0755d8] text-white shadow-blue-950/30'
+                          : 'rounded-bl-md border border-white/[0.07] bg-[#141b29] text-slate-100 shadow-black/20'
+                      }
+                      ${
+                        m.status === 'sending'
+                          ? 'opacity-60'
+                          : ''
+                      }
+                    `}
+                  >
+                    {m.content}
+                  </div>
+                </div>
+
+                <p
+                  className={`mt-1 flex items-center gap-1.5 px-1 text-[11px] text-slate-500 ${
+                    mine ? 'justify-end' : 'justify-start'
+                  }`}
+                >
+                  {m.status === 'sending' ? (
+                    'Sending…'
+                  ) : m.status === 'failed' ? (
+                    <>
+                      <AlertCircle
+                        className="h-3.5 w-3.5 text-red-400"
+                        aria-hidden
+                      />
+
+                      <span className="text-red-400">
+                        Not sent.
+                      </span>
+
+                      <button
+                        className="font-semibold text-blue-400 underline"
+                        onClick={() => void deliver(m)}
+                      >
+                        Retry
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {timeLabel(m.created_at)}
+
+                      {mine &&
+                        privacy.read_receipts_enabled &&
+                        peerReadAt &&
+                        new Date(peerReadAt).getTime() >=
+                          new Date(m.created_at).getTime() && (
+                          <CheckCheck
+                            className="h-4 w-4 text-emerald-400"
+                            aria-label="Read"
+                          />
+                        )}
+                    </>
+                  )}
+                </p>
+              </div>
+            );
+          })}
 
         <div ref={bottom} />
       </div>
@@ -904,9 +1058,31 @@ export function ConversationView({
           </p>
         )}
 
-        {!text.trim() && <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
-          {['Hey! How has your day been?', 'What are you listening to lately?', 'Would you be up for coffee sometime?'].map((reply, index) => <button key={index} type="button" onClick={() => { setText(reply); textarea.current?.focus(); }} className="shrink-0 rounded-full border border-slate-700 bg-[#0b1220] px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-blue-500 hover:text-white">{index === 0 ? '👋 Say hello' : index === 1 ? '🎧 Music' : '☕ Plan a date'}</button>)}
-        </div>}
+        {!text.trim() && (
+          <div className="mb-2 flex gap-2 overflow-x-auto pb-1">
+            {[
+              'Hey! How has your day been?',
+              'What are you listening to lately?',
+              'Would you be up for coffee sometime?',
+            ].map((reply, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => {
+                  setText(reply);
+                  textarea.current?.focus();
+                }}
+                className="shrink-0 rounded-full border border-slate-700 bg-[#0b1220] px-3 py-2 text-xs font-medium text-slate-300 transition hover:border-blue-500 hover:text-white"
+              >
+                {index === 0
+                  ? '👋 Say hello'
+                  : index === 1
+                    ? '🎧 Music'
+                    : '☕ Plan a date'}
+              </button>
+            ))}
+          </div>
+        )}
 
         <form
           onSubmit={submit}
